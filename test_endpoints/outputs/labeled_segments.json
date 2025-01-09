@@ -1,0 +1,228 @@
+{
+  "segments": [
+    {
+      "startTime": 8.2265625,
+      "endTime": 9.3740625,
+      "text": "السلام عليكم.",
+      "speaker": "Speaker 0",
+      "channel": 0,
+      "label": "greeting"
+    },
+    {
+      "startTime": 10.369687500000001,
+      "endTime": 11.3315625,
+      "text": "اهلا",
+      "speaker": "Speaker 1",
+      "channel": 0,
+      "label": "greeting"
+    },
+    {
+      "startTime": 12.479062500000001,
+      "endTime": 15.263437500000002,
+      "text": "وسهلا فيك. انا باصد اونلاين ما في عندكن شحن اونلاين.",
+      "speaker": "Speaker 1",
+      "channel": 0,
+      "label": "Info Request"
+    },
+    {
+      "startTime": 16.5121875,
+      "endTime": 18.9928125,
+      "text": "كيف توصل? مسلا متل مسلا ما فيك شي",
+      "speaker": "Speaker 1",
+      "channel": 0,
+      "label": null
+    },
+    {
+      "startTime": 20.9503125,
+      "endTime": 22.2496875,
+      "text": "متل نحن",
+      "speaker": "Speaker 1",
+      "channel": 0,
+      "label": null
+    },
+    {
+      "startTime": 22.6546875,
+      "endTime": 27.8521875,
+      "text": "أغلب الزبائن توصل البضاعة عنا على المكتب وبعدين بنشحنها للزبائن مباشرة.",
+      "speaker": "Speaker 0",
+      "channel": 0,
+      "label": null
+    },
+    {
+      "startTime": 28.4428125,
+      "endTime": 30.4340625,
+      "text": "يعني انتو جملة قصدي شحن جملة ما بحكي عن جملة.",
+      "speaker": "Speaker 1",
+      "channel": 0,
+      "label": null
+    },
+    {
+      "startTime": 31.0246875,
+      "endTime": 35.040937500000005,
+      "text": "حتى لو كان مفرق بشحن لك اياه مفرق بس توصل عنا",
+      "speaker": "Speaker 0",
+      "channel": 0,
+      "label": null
+    },
+    {
+      "startTime": 35.378437500000004,
+      "endTime": 40.542187500000004,
+      "text": "عالمكتب بعدين بفرزهم وبشحنها لكل اه شخص على انفرادي يعني.",
+      "speaker": "Speaker 0",
+      "channel": 0,
+      "label": null
+    },
+    {
+      "startTime": 41.9428125,
+      "endTime": 42.837187500000006,
+      "text": "اه ايوه.",
+      "speaker": "Speaker 1",
+      "channel": 0,
+      "label": null
+    },
+    {
+      "startTime": 44.6765625,
+      "endTime": 48.2540625,
+      "text": "يعني تكون جملة مسلا قصدي تكون جملة يعني محطة عندكن هون بالمكتب قصدي.",
+      "speaker": "Speaker 1",
+      "channel": 0,
+      "label": null
+    },
+    {
+      "startTime": 49.1146875,
+      "endTime": 55.4428125,
+      "text": "يعني ممكن تبعت لناها اونلاين بالشحن اه قصدك الشحن الداخلي نحنا باسطنبول",
+      "speaker": "Speaker 0",
+      "channel": 0,
+      "label": null
+    },
+    {
+      "startTime": 56.18531250000001,
+      "endTime": 57.2315625,
+      "text": "- نحن في اسطنبول، ماذا؟",
+      "speaker": "Speaker 1",
+      "channel": 0,
+      "label": null
+    },
+    {
+      "startTime": 57.602812500000006,
+      "endTime": 62.884687500000005,
+      "text": "ممكن إذا لم تتوصل إلى المكتب فهمت عليك أن تصل البضاعة إلى المكتب؟",
+      "speaker": "Speaker 0",
+      "channel": 0,
+      "label": "Info Request"
+    },
+    {
+      "startTime": 62.31093750000001,
+      "endTime": 62.378437500000004,
+      "text": "ليس لدي",
+      "speaker": "Speaker 1",
+      "channel": 0,
+      "label": null
+    },
+    {
+      "startTime": 66.4621875,
+      "endTime": 69.6346875,
+      "text": "مشكلة في وضعها في المكتب ولكن هناك شحن مفرغ، لديكم خطوة مثل الترندين؟",
+      "speaker": "Speaker 1",
+      "channel": 0,
+      "label": null
+    },
+    {
+      "startTime": 69.9215625,
+      "endTime": 74.0390625,
+      "text": "لدينا مجزأ نصف كيلو كيلو كيلو ونصف كيلو، هذه التخصصات موجودة",
+      "speaker": "Speaker 0",
+      "channel": 0,
+      "label": null
+    },
+    {
+      "startTime": 75.7603125,
+      "endTime": 77.7515625,
+      "text": "- نعم، أقل كيلوغرام كل يوم؟",
+      "speaker": "Speaker 1",
+      "channel": 0,
+      "label": "Info Request"
+    },
+    {
+      "startTime": 94.6771875,
+      "endTime": 100.6846875,
+      "text": "اسعار جيدة بس انت قل لي شو الدول بالزبط لحتى اعطيك افضل سعر عليها.",
+      "speaker": "Speaker 0",
+      "channel": 0,
+      "label": "Info Request"
+    },
+    {
+      "startTime": 102.60843750000001,
+      "endTime": 104.6671875,
+      "text": "بالضبط. بعتت لك العنوان عالواتساب.",
+      "speaker": "Speaker 0",
+      "channel": 0,
+      "label": null
+    },
+    {
+      "startTime": 105.0890625,
+      "endTime": 106.6584375,
+      "text": "طيب اعطيني اللي استسقيت.",
+      "speaker": "Speaker 1",
+      "channel": 0,
+      "label": null
+    },
+    {
+      "startTime": 107.2828125,
+      "endTime": 109.4428125,
+      "text": "اه كل دول الخليج ولا?",
+      "speaker": "Speaker 0",
+      "channel": 0,
+      "label": "Info Request"
+    },
+    {
+      "startTime": 110.42156250000001,
+      "endTime": 111.7209375,
+      "text": "اه ممكن اه معلش اه.",
+      "speaker": "Speaker 1",
+      "channel": 0,
+      "label": null
+    },
+    {
+      "startTime": 112.6828125,
+      "endTime": 116.5809375,
+      "text": "تمام. راح ابعت لك بحدود من نص كيلو للخمسة كيلو مناسب.",
+      "speaker": "Speaker 0",
+      "channel": 0,
+      "label": "Solution"
+    },
+    {
+      "startTime": 118.01531250000001,
+      "endTime": 119.06156250000001,
+      "text": "معلش اه معلش.",
+      "speaker": "Speaker 0",
+      "channel": 0,
+      "label": null
+    },
+    {
+      "startTime": 119.68593750000001,
+      "endTime": 123.1959375,
+      "text": "الاوزان اللي انت بتهمك اكتر شي. ليك عم بسألك.",
+      "speaker": "Speaker 0",
+      "channel": 0,
+      "label": "Info Request"
+    },
+    {
+      "startTime": 124.52906250000001,
+      "endTime": 125.4909375,
+      "text": "امين مشكلة الله يعطيك العافية. الله يعافيك يا رب.",
+      "speaker": "Speaker 1",
+      "channel": 0,
+      "label": null
+    },
+    {
+      "startTime": 128.9503125,
+      "endTime": 130.2834375,
+      "text": "ماشي يلا بنتظرك. مع السلامة.",
+      "speaker": "Speaker 1",
+      "channel": 0,
+      "label": "Farewell"
+    }
+  ]
+}

@@ -1,0 +1,52 @@
+{
+  "segments": [
+    {
+      "startTime": 1.3415624999999998,
+      "endTime": 2.3709375,
+      "text": "السلام عليكم",
+      "speaker": "Speaker 0",
+      "channel": 0,
+      "sentiment": "neutral"
+    },
+    {
+      "startTime": 3.8390625,
+      "endTime": 4.5646875,
+      "text": "السلام عليكم",
+      "speaker": "Speaker 1",
+      "channel": 0,
+      "sentiment": "neutral"
+    },
+    {
+      "startTime": 4.5646875,
+      "endTime": 4.8853124999999995,
+      "text": "تفضل،",
+      "speaker": "Speaker 0",
+      "channel": 0,
+      "sentiment": "neutral"
+    },
+    {
+      "startTime": 5.7796875,
+      "endTime": 7.129687500000001,
+      "text": "كيف حالك؟",
+      "speaker": "Speaker 0",
+      "channel": 0,
+      "sentiment": "neutral"
+    },
+    {
+      "startTime": 9.4921875,
+      "endTime": 13.694062500000001,
+      "text": "إذا كنت ترغب في استفسار شحن لدبي؟",
+      "speaker": "Speaker 1",
+      "channel": 0,
+      "sentiment": "neutral"
+    },
+    {
+      "startTime": 14.352187500000003,
+      "endTime": 15.449062500000004,
+      "text": "نعم، شحن لدبي",
+      "speaker": "Speaker 0",
+      "channel": 0,
+      "sentiment": "neutral"
+    }
+  ]
+}
