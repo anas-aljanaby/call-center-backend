@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, HTTPException
+from fastapi import FastAPI, UploadFile, HTTPException, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 import os
 from dotenv import load_dotenv
@@ -14,6 +14,7 @@ import numpy as np
 from pydantic import BaseModel
 from typing import List, Dict, Optional
 import openai
+from models import ProcessingSettings, TranscriptionRequest, ConversationRequest
 
 load_dotenv()
 
@@ -33,11 +34,43 @@ app.add_middleware(
 
 MODEL = "gpt-3.5-turbo"
 
+
 NEURALSPACE_API_KEY = os.getenv('NEURALSPACE_API_KEY')
 if not NEURALSPACE_API_KEY:
     raise ValueError("NEURALSPACE_API_KEY environment variable is not set")
 
 vai = ns.VoiceAI(api_key=NEURALSPACE_API_KEY)
+
+SUMMARY_PROMPT = """
+Please provide a concise, single-paragraph summary of this customer service conversation in Arabic.
+Include the main purpose of the call, key points discussed, and any resolutions reached.
+Respond with a JSON object containing only a "summary" field with the paragraph.
+
+Conversation:
+"""
+
+EVENTS_PROMPT = """
+Analyze this customer service conversation and identify key events that occurred.
+Focus on important actions, requests, or decisions made during the conversation.
+
+For each event:
+1. Clearly indicate who took the action (Agent or Customer)
+2. Describe the specific event or action
+3. Include any relevant details or outcomes
+
+Format your response as a JSON array of events like this:
+{
+    "events": [
+        "Customer explained they were charged incorrectly and requested a refund",
+        "Agent verified the transaction details in the system",
+        "Agent approved a refund of 50 AED"
+    ]
+}
+
+Do not include any other text or formatting in your response. Do not include the speaker name in the event description. 
+Just provide the event description as in the example.
+Conversation:
+"""
 
 async def enhance_audio_file(input_path, output_path):
     """
@@ -75,71 +108,75 @@ async def transcribe_audio_dummy(file: UploadFile):
     }
 
 @app.post("/api/transcribe")
-async def transcribe_audio(file: UploadFile, enhance_audio: bool = False):
+async def transcribe_audio(
+    file: UploadFile = File(...),
+    settings: str = Form(...)
+):
     """
-    Endpoint to transcribe audio files and return both full transcription and word timestamps
+    Endpoint to transcribe audio files with configurable settings
     """
-    allowed_extensions = {'.mp3', '.wav', '.m4a', '.flac', '.ogg'}
-    file_ext = Path(file.filename).suffix.lower()
-    
-    if file_ext not in allowed_extensions:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid file format. Supported formats: {', '.join(allowed_extensions)}"
-        )
-
     try:
-        with NamedTemporaryFile(delete=False, suffix=file_ext) as temp_file:
-            content = await file.read()
-            temp_file.write(content)
+        # Parse settings JSON string
+        settings_dict = json.loads(settings)
+        settings_obj = ProcessingSettings(**settings_dict)
+        
+        if settings_obj.transcriptionModel == 'dummy':
+            return await transcribe_audio_dummy(file)
             
-            input_file = temp_file.name
-            
-            if enhance_audio:
-                enhanced_file = NamedTemporaryFile(delete=False, suffix='.wav')
-                await enhance_audio_file(temp_file.name, enhanced_file.name)
-                input_file = enhanced_file.name
+        allowed_extensions = {'.mp3', '.wav', '.m4a', '.flac', '.ogg'}
+        file_ext = Path(file.filename).suffix.lower()
+        
+        if file_ext not in allowed_extensions:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid file format. Supported formats: {', '.join(allowed_extensions)}"
+            )
 
-            config = {
-                'file_transcription': {
-                    'language_id': 'ar-ir',
-                    'mode': 'advanced',
-                },
-                "speaker_diarization": {
-                    "mode": "speakers",
-                    "num_speakers" : 2,
-                },
-                "sentiment_detect": True
-            }
-            job_id = vai.transcribe(file=input_file, config=config)
-            result = vai.poll_until_complete(job_id)
-
-            os.unlink(temp_file.name)
-            if enhance_audio:
-                os.unlink(enhanced_file.name)
-
-            if result.get('success'):
-                return {
-                    "segments": result['data']['result']['transcription']['segments']
+        try:
+            with NamedTemporaryFile(delete=False, suffix=file_ext) as temp_file:
+                content = await file.read()
+                temp_file.write(content)
+                
+                config = {
+                    'file_transcription': {
+                        'language_id': settings_obj.languageId,
+                        'mode': 'advanced',
+                    },
+                    "speaker_diarization": {
+                        "mode": "speakers",
+                        "num_speakers": 2,
+                    },
+                    "sentiment_detect": settings_obj.sentimentDetect
                 }
-            else:
-                raise HTTPException(
-                    status_code=500,
-                    detail="Transcription failed"
-                )
+                
+                job_id = vai.transcribe(file=temp_file.name, config=config)
+                result = vai.poll_until_complete(job_id)
+
+                os.unlink(temp_file.name)
+
+                if result.get('success'):
+                    return {
+                        "segments": result['data']['result']['transcription']['segments']
+                    }
+                else:
+                    raise HTTPException(
+                        status_code=500,
+                        detail="Transcription failed"
+                    )
+
+        except Exception as e:
+            if 'temp_file' in locals():
+                try:
+                    os.unlink(temp_file.name)
+                except:
+                    pass
+            raise HTTPException(
+                status_code=500,
+                detail=f"Error processing audio file: {str(e)}"
+            )
 
     except Exception as e:
-        if 'temp_file' in locals():
-            try:
-                os.unlink(temp_file.name)
-            except:
-                pass
-        if enhance_audio and 'enhanced_file' in locals():
-            try:
-                os.unlink(enhanced_file.name)
-            except:
-                pass
-        
+        print(f"Error in transcribe_audio: {str(e)}")
         raise HTTPException(
             status_code=500,
             detail=f"Error processing audio file: {str(e)}"
@@ -328,46 +365,23 @@ class ConversationSegment(BaseModel):
 
 class ConversationRequest(BaseModel):
     segments: List[ConversationSegment]
+    settings: ProcessingSettings
 
 @app.post("/api/analyze-events")
 async def analyze_events(request: ConversationRequest):
     client = openai.OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
     
-    # Prepare the conversation flow
     conversation = "\n".join([
         f"[{segment.speaker}]: {segment.text}"
         for segment in request.segments
     ])
     
-    prompt = """
-    Analyze this customer service conversation and identify key events that occurred.
-    Focus on important actions, requests, or decisions made during the conversation.
-    
-    For each event:
-    1. Clearly indicate who took the action (Agent or Customer)
-    2. Describe the specific event or action
-    3. Include any relevant details or outcomes
-    
-    Format your response as a JSON array of events like this:
-    {
-        "events": [
-            "Customer explained they were charged incorrectly and requested a refund",
-            "Agent verified the transaction details in the system",
-            "Agent approved a refund of 50 AED"
-        ]
-    }
-    
-    Do not include any other text or formatting in your response. Do not include the speaker name in the event description. 
-    Just provide the event description as in the example.
-    Conversation:
-    """
-    
     try:
         response = client.chat.completions.create(
-            model=MODEL,
+            model=request.settings.aiModel,
             messages=[
                 {"role": "system", "content": "You are a conversation analysis assistant specialized in Arabic customer service interactions."},
-                {"role": "user", "content": prompt + conversation}
+                {"role": "user", "content": EVENTS_PROMPT + conversation}
             ],
             temperature=0.3,
             max_tokens=500
@@ -400,29 +414,20 @@ class SummaryRequest(BaseModel):
     segments: List[TranscriptSegment]
 
 @app.post("/api/summarize-conversation")
-async def summarize_conversation(request: SummaryRequest):
+async def summarize_conversation(request: ConversationRequest):
     client = openai.OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
     
-    # Prepare the conversation flow
     conversation = "\n".join([
         f"[{segment.speaker}]: {segment.text}"
         for segment in request.segments
     ])
     
-    prompt = """
-    Please provide a concise, single-paragraph summary of this customer service conversation in Arabic.
-    Include the main purpose of the call, key points discussed, and any resolutions reached.
-    Respond with a JSON object containing only a "summary" field with the paragraph.
-
-    Conversation:
-    """
-    
     try:
         response = client.chat.completions.create(
-            model=MODEL,
+            model=request.settings.aiModel,
             messages=[
                 {"role": "system", "content": "You are a conversation analysis assistant specialized in Arabic customer service interactions."},
-                {"role": "user", "content": prompt + conversation}
+                {"role": "user", "content": SUMMARY_PROMPT + conversation}
             ],
             temperature=0.3,
             max_tokens=500
@@ -438,7 +443,7 @@ async def summarize_conversation(request: SummaryRequest):
         except json.JSONDecodeError:
             print(f"Failed to parse response: {response_text}")
             summary = ""
-        
+        print(request.settings) 
         return {
             "segments": [segment.dict() for segment in request.segments],
             "summary": summary
