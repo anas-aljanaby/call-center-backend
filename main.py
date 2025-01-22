@@ -51,24 +51,30 @@ Conversation:
 
 EVENTS_PROMPT = """
 Analyze this customer service conversation and identify key events that occurred.
-Focus on important actions, requests, or decisions made during the conversation.
+Group events by actor (Agent/Customer) and keep descriptions concise.
 
-For each event:
-1. Clearly indicate who took the action (Agent or Customer)
-2. Describe the specific event or action
-3. Include any relevant details or outcomes
-
-Format your response as a JSON array of events like this:
+Format your response as a JSON object with this structure:
 {
     "events": [
-        "Customer explained they were charged incorrectly and requested a refund",
-        "Agent verified the transaction details in the system",
-        "Agent approved a refund of 50 AED"
+        {
+            "actor": "agent",
+            "action": "approved refund of 50 AED"
+        },
+        {
+            "actor": "customer",
+            "action": "requested account closure and data deletion"
+        }
     ]
 }
 
-Do not include any other text or formatting in your response. Do not include the speaker name in the event description. 
-Just provide the event description as in the example.
+Guidelines:
+1. Keep actions brief but informative
+2. Group similar actions by the same actor together
+3. Use lowercase for actor values
+4. Remove any unnecessary words
+5. Focus only on significant actions/decisions
+
+Only return the JSON object, no additional text.
 Conversation:
 """
 
@@ -387,7 +393,6 @@ async def analyze_events(request: ConversationRequest):
             max_tokens=500
         )
         
-        # Clean and parse the response
         response_text = response.choices[0].message.content.strip()
         response_text = response_text.replace('```json', '').replace('```', '').strip()
         
