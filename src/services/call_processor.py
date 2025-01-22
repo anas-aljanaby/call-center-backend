@@ -90,11 +90,23 @@ class CallProcessor:
             events_response.raise_for_status()
             events_data = events_response.json()
             
-            # Update call_analytics table with both transcription and events
+            # Get conversation summary
+            summary_response = requests.post(
+                f"{self.api_url}/api/summarize-conversation",
+                json={
+                    'segments': transcription_data['segments'],
+                    'settings': events_settings  # Reuse the same settings
+                }
+            )
+            summary_response.raise_for_status()
+            summary_data = summary_response.json()
+            
+            # Update call_analytics table with transcription, events, and summary
             self.supabase.table('call_analytics').insert({
                 'call_id': call_id,
                 'transcription': transcription_data['segments'],
-                'events': events_data['key_events']
+                'events': events_data['key_events'],
+                'summary': summary_data['summary']
             }).execute()
             
             # Mark call as processed
