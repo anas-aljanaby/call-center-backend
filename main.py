@@ -58,11 +58,13 @@ Format your response as a JSON object with this structure:
     "events": [
         {
             "actor": "agent",
-            "action": "approved refund of 50 AED"
+            "action": "approved refund of 50 AED",
+            "timestamp": 45.23
         },
         {
             "actor": "customer",
-            "action": "requested account closure and data deletion"
+            "action": "requested account closure and data deletion",
+            "timestamp": 120.45
         }
     ]
 }
@@ -73,6 +75,7 @@ Guidelines:
 3. Use lowercase for actor values
 4. Remove any unnecessary words
 5. Focus only on significant actions/decisions
+6. Include the startTime of the segment where the event occurred as timestamp
 
 Only return the JSON object, no additional text.
 Conversation:
