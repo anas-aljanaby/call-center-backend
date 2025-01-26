@@ -1,20 +1,23 @@
 from supabase import create_client, Client
 import os
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import List, Dict
 from dotenv import load_dotenv
 import mimetypes
+import librosa
+import random
 
 load_dotenv()
 
 class FileUploader:
-    def __init__(self, agent_id: str = None):
+    def __init__(self, organization_id: str, agent_id: str = None):
         self.supabase: Client = create_client(
             os.getenv('SUPABASE_URL'),
             os.getenv('SUPABASE_KEY')
         )
         self.bucket_name = 'call-recordings'
+        self.organization_id = organization_id
         self.agent_id = agent_id
         
     def ensure_bucket_exists(self):
@@ -34,13 +37,15 @@ class FileUploader:
     def upload_file(self, file_path: Path) -> Dict:
         """Upload a single file to Supabase storage and create database entry"""
         try:
-            # Ensure file exists
             if not file_path.exists():
                 raise FileNotFoundError(f"File not found: {file_path}")
             
-            # Generate a unique filename
+            # Generate unique filename
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             unique_filename = f"{timestamp}_{file_path.name}"
+            
+            # Get audio duration
+            duration = int(librosa.get_duration(path=str(file_path)))
             
             # Upload file to storage
             with open(file_path, 'rb') as f:
@@ -56,19 +61,20 @@ class FileUploader:
                 60 * 60 * 24  # 24 hour expiry
             )['signedURL']
             
-            # Create database entry with agent_id
+            # Create database entry
+            now = datetime.now()
             db_entry = {
+                'organization_id': self.organization_id,
+                'agent_id': self.agent_id,
                 'recording_url': file_url,
-                'original_filename': file_path.name,
+                'duration': duration,
+                'started_at': (now - timedelta(seconds=duration)).isoformat(),
+                'ended_at': now.isoformat(),
+                'call_type': 'inbound',
                 'processed': False,
-                'created_at': datetime.now().isoformat()
+                'resolution_status': 'pending'
             }
             
-            # Add agent_id if provided
-            if self.agent_id:
-                db_entry['agent_id'] = self.agent_id
-            
-            # Insert into database
             response = self.supabase.table('calls').insert(db_entry).execute()
             
             return {
@@ -81,8 +87,7 @@ class FileUploader:
             print(f"Error uploading file {file_path}: {str(e)}")
             return {
                 'success': False,
-                'error': str(e),
-                'file_path': str(file_path)
+                'error': str(e)
             }
     
     def upload_directory(self, directory_path: str) -> List[Dict]:
@@ -105,8 +110,31 @@ class FileUploader:
             ]
             
             results = []
+            current_time = datetime.now().replace(minute=0, second=0, microsecond=0)
+            
             for file_path in audio_files:
+                # Randomly select an hour for the call
+                hour_offset = random.randint(0, 23)
+                call_time = current_time - timedelta(hours=hour_offset)
+                
+                # Ensure only 3-5 calls per hour
+                if len([r for r in results if r['success'] and r['db_record']['started_at'].startswith(call_time.strftime("%Y-%m-%dT%H"))]) >= 5:
+                    continue
+                
+                # Upload file
                 result = self.upload_file(file_path)
+                if result['success']:
+                    # Update the call's start and end times
+                    duration = result['db_record']['duration']
+                    result['db_record']['started_at'] = (call_time - timedelta(seconds=duration)).isoformat()
+                    result['db_record']['ended_at'] = call_time.isoformat()
+                    
+                    # Update the database entry with new times
+                    self.supabase.table('calls').update({
+                        'started_at': result['db_record']['started_at'],
+                        'ended_at': result['db_record']['ended_at']
+                    }).eq('id', result['db_record']['id']).execute()
+                
                 results.append(result)
                 
                 # Print status

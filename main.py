@@ -52,6 +52,14 @@ Conversation:
 EVENTS_PROMPT = """
 Analyze this customer service conversation and identify key events that occurred.
 Group events by actor (Agent/Customer) and keep descriptions concise.
+Return at most 3 events.
+
+The input data is structured as a list of segments, each with the following fields:
+- startTime: The start time of the segment in seconds.
+- endTime: The end time of the segment in seconds.
+- text: The spoken text in the segment.
+- speaker: The speaker identifier (e.g., "Speaker 0", "Speaker 1").
+- channel: The audio channel number.
 
 Format your response as a JSON object with this structure:
 {
@@ -380,23 +388,24 @@ class ConversationRequest(BaseModel):
 async def analyze_events(request: ConversationRequest):
     client = openai.OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
     
-    conversation = "\n".join([
-        f"[{segment.speaker}]: {segment.text}"
-        for segment in request.segments
-    ])
+    # Convert the segments to JSON format
+    conversation_json = json.dumps([segment.dict() for segment in request.segments], ensure_ascii=False, indent=2)
+    print(f"Conversation JSON being sent for analysis: {conversation_json}")
     
     try:
         response = client.chat.completions.create(
             model=request.settings.aiModel,
             messages=[
                 {"role": "system", "content": "You are a conversation analysis assistant specialized in Arabic customer service interactions."},
-                {"role": "user", "content": EVENTS_PROMPT + conversation}
+                {"role": "user", "content": EVENTS_PROMPT + conversation_json}
             ],
             temperature=0.3,
             max_tokens=500
         )
         
         response_text = response.choices[0].message.content.strip()
+        print(f"Raw response text: {response_text}")  # Debugging line
+        
         response_text = response_text.replace('```json', '').replace('```', '').strip()
         
         try:
