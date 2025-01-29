@@ -21,6 +21,7 @@ class RAGService:
             for chunk in chunks
         ])
         
+        print(context)
         # Generate answer using context
         messages = [
             {"role": "system", "content": "You are a helpful assistant. Use the provided context to answer the user's question. If you cannot find the answer in the context, say so."},

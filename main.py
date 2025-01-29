@@ -484,73 +484,73 @@ async def summarize_conversation(request: ConversationRequest):
 @app.post("/api/documents/upload")
 async def upload_document(
     file: UploadFile = File(...),
-    title: str = Form(...),
-    category: str = Form(...),
-    summary: Optional[str] = Form(None),
-    tags: Optional[str] = Form(None),
-    helpful_rate: Optional[int] = Form(None)
+    user_id: str = Form(...),
+    metadata: str = Form(...)
 ):
+    """Upload a document file to storage and process it"""
     try:
-        print(f"Received upload request - Title: {title}, Category: {category}, Summary: {summary}")
+        # Parse metadata
+        metadata_dict = json.loads(metadata)
+        metadata_obj = DocumentMetadata(**metadata_dict)
         
-        content = await file.read()
-        file_size = len(content)
-        
-        temp_path = f"/tmp/{file.filename}"
-        with open(temp_path, "wb") as f:
-            f.write(content)
-        
-        processor = DocumentProcessor()
-        text_pages = processor.extract_text_from_pdf(temp_path)
-        
-        all_chunks = []
-        for text, page_num in text_pages:
-            chunks = processor.create_chunks(text, file.filename, page_num)
-            all_chunks.extend(chunks)
-        
-        embeddings = await processor.create_embeddings(all_chunks)
-        
+        # Initialize services
         file_uploader = FileUploader(
-            organization_id="094c5956-44eb-467c-9468-02df3e2b6218",
+            user_id=user_id,
             bucket_name='docs'
         )
-        upload_result = file_uploader.upload_file(Path(temp_path))
         
-        if not upload_result['success']:
-            raise Exception(f"Failed to upload file to storage: {upload_result.get('error', 'Unknown error')}")
-
-        # Parse tags from JSON string
-        parsed_tags = json.loads(tags) if tags else None
-        
-        # Create UTC timestamp
-        utc_now = datetime.now(pytz.UTC)
-        
-        vector_store = VectorStore()
-        metadata = DocumentMetadata(
-            title=title,
-            file_type=file.filename.split('.')[-1],
-            total_pages=len(text_pages),
-            file_size=file_size,
-            source_url=upload_result['file_url'],
-            category=category,
-            summary=summary,
-            tags=parsed_tags,
-            helpful_rating=helpful_rate,
-            use_count=0,
-            last_updated=utc_now
-        )
-        
-        await vector_store.store_document(all_chunks, embeddings, metadata)
-        
-        os.remove(temp_path)
-        
-        return {"message": "Document processed successfully"}
-        
+        # Upload file and get URL
+        with NamedTemporaryFile(delete=False, suffix=Path(file.filename).suffix) as temp_file:
+            content = await file.read()
+            temp_file.write(content)
+            temp_file.flush()
+            
+            # Upload to storage
+            result = file_uploader.upload_file(Path(temp_file.name))
+            if not result['success']:
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Failed to upload file: {result.get('error', 'Unknown error')}"
+                )
+            
+            # Update metadata with file URL
+            metadata_obj.source_url = result['file_url']
+            metadata_obj.file_size = len(content)
+            metadata_obj.last_updated = datetime.now(pytz.UTC)
+            
+            # Process document
+            processor = DocumentProcessor()
+            chunks = await processor.process_document(temp_file.name, metadata_obj)
+            
+            # Get embeddings for chunks
+            embeddings = []
+            for chunk in chunks:
+                response = processor.openai_client.embeddings.create(
+                    input=chunk.content,
+                    model="text-embedding-ada-002"
+                )
+                embeddings.append(response.data[0].embedding)
+            
+            # Store in vector database
+            vector_store = VectorStore()
+            await vector_store.store_document(chunks, embeddings, metadata_obj)
+            
+            return {
+                "success": True,
+                "message": "Document uploaded and processed successfully",
+                "file_url": result['file_url']
+            }
+            
     except Exception as e:
         print(f"Error in upload_document: {str(e)}")
-        import traceback
-        print(traceback.format_exc())
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error uploading document: {str(e)}"
+        )
+    finally:
+        # Clean up temp file
+        if 'temp_file' in locals():
+            os.unlink(temp_file.name)
 
 # Add this class for request validation
 class QuestionRequest(BaseModel):

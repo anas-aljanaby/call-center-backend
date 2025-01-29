@@ -19,15 +19,16 @@ class FileUploader:
         self.bucket_name = bucket_name
         self.user_id = user_id
         self.agent_id = agent_id
+        self.ensure_bucket_exists()
         
     def ensure_bucket_exists(self):
         """Ensure the storage bucket exists"""
         try:
             buckets = self.supabase.storage.list_buckets()
-            bucket_exists = any(b['name'] == self.bucket_name for b in buckets)
+            bucket_exists = any(bucket.name == self.bucket_name for bucket in buckets)
             
             if not bucket_exists:
-                self.supabase.storage.create_bucket(self.bucket_name, {'public': False})
+                self.supabase.storage.create_bucket(self.bucket_name)
                 print(f"Created bucket: {self.bucket_name}")
         except Exception as e:
             print(f"Error ensuring bucket exists: {str(e)}")
@@ -112,58 +113,27 @@ class FileUploader:
             }
     
     def upload_directory(self, directory_path: str) -> List[Dict]:
-        """Upload all audio files from a directory"""
-        try:
-            # Ensure bucket exists
-            self.ensure_bucket_exists()
-            
-            directory = Path(directory_path)
-            if not directory.exists():
-                raise NotADirectoryError(f"Directory not found: {directory}")
-            
-            # Supported audio extensions
-            audio_extensions = {'.mp3', '.wav', '.m4a', '.flac', '.ogg'}
-            
-            # Find all audio files
-            audio_files = [
-                f for f in directory.rglob("*")
-                if f.suffix.lower() in audio_extensions
-            ]
-            
-            results = []
-            current_time = datetime.now().replace(minute=0, second=0, microsecond=0)
-            
-            for file_path in audio_files:
-                # Randomly select an hour for the call
-                hour_offset = random.randint(0, 23)
-                call_time = current_time - timedelta(hours=hour_offset)
-                
-                # Ensure only 3-5 calls per hour
-                if len([r for r in results if r['success'] and r['db_record']['started_at'].startswith(call_time.strftime("%Y-%m-%dT%H"))]) >= 5:
-                    continue
-                
-                # Upload file
-                result = self.upload_file(file_path)
-                if result['success']:
-                    # Update the call's start and end times
-                    duration = result['db_record']['duration']
-                    result['db_record']['started_at'] = (call_time - timedelta(seconds=duration)).isoformat()
-                    result['db_record']['ended_at'] = call_time.isoformat()
-                    
-                    # Update the database entry with new times
-                    self.supabase.table('calls').update({
-                        'started_at': result['db_record']['started_at'],
-                        'ended_at': result['db_record']['ended_at']
-                    }).eq('id', result['db_record']['id']).execute()
-                
-                results.append(result)
-                
-                # Print status
-                status = "✓" if result['success'] else "✗"
-                print(f"{status} {file_path.name}")
-            
-            return results
-            
-        except Exception as e:
-            print(f"Error processing directory {directory_path}: {str(e)}")
-            return [] 
+        """Upload all audio files in a directory"""
+        path = Path(directory_path)
+        if not path.is_dir():
+            raise ValueError(f"Not a directory: {directory_path}")
+        
+        # Define supported audio extensions
+        audio_extensions = {'.mp3', '.wav', '.m4a', '.flac', '.ogg', '.aac', '.wma'}
+        
+        results = []
+        # Use glob with a tuple of extensions
+        for file_path in path.glob('*.*'):
+            if file_path.suffix.lower() in audio_extensions:
+                try:
+                    result = self.upload_file(file_path)
+                    results.append(result)
+                except Exception as e:
+                    print(f"Error uploading {file_path}: {str(e)}")
+                    results.append({
+                        'success': False,
+                        'error': str(e),
+                        'file_path': str(file_path)
+                    })
+        
+        return results 

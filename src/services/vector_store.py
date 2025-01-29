@@ -58,35 +58,52 @@ class VectorStore:
         match_threshold: float = 0.1,
         match_count: int = 3
     ) -> List[Dict]:
-        # Create embedding for the query
-        response = self.openai_client.embeddings.create(
-            input=query,
-            model="text-embedding-3-large"
-        )
-        query_embedding = response.data[0].embedding
+        try:
+            # Create embedding for the query
+            response = self.openai_client.embeddings.create(
+                input=query,
+                model="text-embedding-ada-002"  # Match the model used in storage
+            )
+            query_embedding = response.data[0].embedding
 
-        # Search for similar chunks using the match_chunks function
-        result = self.supabase.rpc(
-            'match_chunks',
-            {
-                'query_embedding': query_embedding,
-                'match_threshold': match_threshold,
-                'match_count': match_count
-            }
-        ).execute()
+            # Debug print
+            print(f"Generated query embedding of length: {len(query_embedding)}")
 
-        # Join with documents table to get source information
-        chunks = result.data
-        if chunks:
-            # Get document information for the chunks
-            doc_ids = list(set(chunk['document_id'] for chunk in chunks))
-            docs = self.supabase.table('documents').select('*').in_('id', doc_ids).execute()
-            doc_map = {doc['id']: doc for doc in docs.data}
+            # Search for similar chunks using the match_chunks function
+            result = self.supabase.rpc(
+                'match_chunks',
+                {
+                    'query_embedding': query_embedding,
+                    'match_threshold': match_threshold,
+                    'match_count': match_count
+                }
+            ).execute()
+
+            # Debug print
+            print(f"RPC result: {result.data}")
+
+            # Join with documents table to get source information
+            chunks = result.data
+            if chunks:
+                # Get document information for the chunks
+                doc_ids = list(set(chunk['document_id'] for chunk in chunks))
+                docs = self.supabase.table('documents').select('*').in_('id', doc_ids).execute()
+                doc_map = {doc['id']: doc for doc in docs.data}
+                
+                # Add source information to chunks
+                for chunk in chunks:
+                    doc = doc_map.get(chunk['document_id'])
+                    if doc:
+                        chunk['source'] = doc['title']
+                        chunk['similarity'] = chunk.get('similarity', 0.0)
+                        print(f"Found chunk from document: {doc['title']}")  # Debug print
+                
+                print(f"Found {len(chunks)} relevant chunks")
+                return chunks
+
+            print("No matching chunks found")
+            return []
             
-            # Add source information to chunks
-            for chunk in chunks:
-                doc = doc_map.get(chunk['document_id'])
-                if doc:
-                    chunk['source'] = doc['title']
-
-        return chunks or [] 
+        except Exception as e:
+            print(f"Error in search_similar_chunks: {str(e)}")
+            return [] 

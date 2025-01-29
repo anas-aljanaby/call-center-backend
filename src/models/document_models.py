@@ -12,9 +12,9 @@ class DocumentChunk(BaseModel):
 class DocumentMetadata(BaseModel):
     title: str
     file_type: str
-    total_pages: Optional[int]
+    total_pages: Optional[int] = None
     file_size: int
-    source_url: str
+    source_url: Optional[str] = None
     category: str
     summary: Optional[str] = None
     tags: Optional[List[str]] = None
