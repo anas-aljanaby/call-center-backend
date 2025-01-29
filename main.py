@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, HTTPException, File, Form
+from fastapi import FastAPI, UploadFile, HTTPException, File, Form, Query
 from fastapi.middleware.cors import CORSMiddleware
 import os
 from dotenv import load_dotenv
@@ -15,6 +15,11 @@ from pydantic import BaseModel
 from typing import List, Dict, Optional
 import openai
 from models import ProcessingSettings, TranscriptionRequest, ConversationRequest
+from src.services.document_processor import DocumentProcessor
+from src.services.vector_store import VectorStore
+from src.models.document_models import DocumentMetadata
+from src.services.file_uploader import FileUploader
+from src.services.rag_service import RAGService
 
 load_dotenv()
 
@@ -472,6 +477,90 @@ async def summarize_conversation(request: ConversationRequest):
             status_code=500,
             detail=f"Error summarizing conversation: {str(e)}"
         )
+
+@app.post("/api/documents/upload")
+async def upload_document(
+    file: UploadFile = File(...),
+    title: str = Form(...),
+    category: str = Form(...)
+):
+    try:
+        # Add logging
+        print(f"Received upload request - Title: {title}, Category: {category}, Filename: {file.filename}")
+        
+        # Read file content
+        content = await file.read()
+        file_size = len(content)
+        
+        # Save temporarily for processing
+        temp_path = f"/tmp/{file.filename}"
+        with open(temp_path, "wb") as f:
+            f.write(content)
+        
+        # Process document
+        processor = DocumentProcessor()
+        text_pages = processor.extract_text_from_pdf(temp_path)
+        
+        # Create chunks
+        all_chunks = []
+        for text, page_num in text_pages:
+            chunks = processor.create_chunks(text, file.filename, page_num)
+            all_chunks.extend(chunks)
+        
+        # Create embeddings
+        embeddings = await processor.create_embeddings(all_chunks)
+        
+        # Upload to Supabase storage
+        file_uploader = FileUploader(
+            organization_id="094c5956-44eb-467c-9468-02df3e2b6218",
+            bucket_name='docs'
+        )
+        upload_result = file_uploader.upload_file(Path(temp_path))
+        
+        if not upload_result['success']:
+            raise Exception(f"Failed to upload file to storage: {upload_result.get('error', 'Unknown error')}")
+        
+        # Store in vector database
+        vector_store = VectorStore()
+        metadata = DocumentMetadata(
+            title=title,
+            file_type=file.filename.split('.')[-1],
+            total_pages=len(text_pages),
+            file_size=file_size,
+            source_url=upload_result['file_url'],
+            category=category
+        )
+        
+        await vector_store.store_document(all_chunks, embeddings, metadata)
+        
+        # Cleanup
+        os.remove(temp_path)
+        
+        return {"message": "Document processed successfully"}
+        
+    except Exception as e:
+        # Log the full error
+        print(f"Error in upload_document: {str(e)}")
+        import traceback
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Add this class for request validation
+class QuestionRequest(BaseModel):
+    question: str
+    max_chunks: int = 5  # Optional with default value
+
+@app.post("/api/documents/query")
+async def query_documents(request: QuestionRequest):
+    try:
+        rag_service = RAGService()
+        result = await rag_service.get_answer(
+            question=request.question,
+            max_chunks=request.max_chunks
+        )
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 port = int(os.getenv("PORT", 8000))
 

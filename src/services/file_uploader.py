@@ -11,19 +11,18 @@ import random
 load_dotenv()
 
 class FileUploader:
-    def __init__(self, organization_id: str, agent_id: str = None):
+    def __init__(self, organization_id: str, agent_id: str = None, bucket_name: str = 'call-recordings'):
         self.supabase: Client = create_client(
             os.getenv('SUPABASE_URL'),
             os.getenv('SUPABASE_KEY')
         )
-        self.bucket_name = 'call-recordings'
+        self.bucket_name = bucket_name
         self.organization_id = organization_id
         self.agent_id = agent_id
         
     def ensure_bucket_exists(self):
         """Ensure the storage bucket exists"""
         try:
-            # List buckets to check if ours exists
             buckets = self.supabase.storage.list_buckets()
             bucket_exists = any(b['name'] == self.bucket_name for b in buckets)
             
@@ -35,7 +34,7 @@ class FileUploader:
             raise
     
     def upload_file(self, file_path: Path) -> Dict:
-        """Upload a single file to Supabase storage and create database entry"""
+        """Upload a single file to Supabase storage"""
         try:
             if not file_path.exists():
                 raise FileNotFoundError(f"File not found: {file_path}")
@@ -43,9 +42,6 @@ class FileUploader:
             # Generate unique filename
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             unique_filename = f"{timestamp}_{file_path.name}"
-            
-            # Get audio duration
-            duration = int(librosa.get_duration(path=str(file_path)))
             
             # Upload file to storage
             with open(file_path, 'rb') as f:
@@ -60,27 +56,33 @@ class FileUploader:
                 unique_filename,
                 60 * 60 * 24  # 24 hour expiry
             )['signedURL']
+
+            # If it's an audio file, create a call entry
+            if self.bucket_name == 'call-recordings':
+                duration = int(librosa.get_duration(path=str(file_path)))
+                now = datetime.now()
+                db_entry = {
+                    'organization_id': self.organization_id,
+                    'agent_id': self.agent_id,
+                    'recording_url': file_url,
+                    'duration': duration,
+                    'started_at': (now - timedelta(seconds=duration)).isoformat(),
+                    'ended_at': now.isoformat(),
+                    'call_type': 'inbound',
+                    'processed': False,
+                    'resolution_status': 'pending'
+                }
+                response = self.supabase.table('calls').insert(db_entry).execute()
+                return {
+                    'success': True,
+                    'file_url': file_url,
+                    'db_record': response.data[0] if response.data else None
+                }
             
-            # Create database entry
-            now = datetime.now()
-            db_entry = {
-                'organization_id': self.organization_id,
-                'agent_id': self.agent_id,
-                'recording_url': file_url,
-                'duration': duration,
-                'started_at': (now - timedelta(seconds=duration)).isoformat(),
-                'ended_at': now.isoformat(),
-                'call_type': 'inbound',
-                'processed': False,
-                'resolution_status': 'pending'
-            }
-            
-            response = self.supabase.table('calls').insert(db_entry).execute()
-            
+            # For non-audio files
             return {
                 'success': True,
-                'file_url': file_url,
-                'db_record': response.data[0] if response.data else None
+                'file_url': file_url
             }
             
         except Exception as e:
