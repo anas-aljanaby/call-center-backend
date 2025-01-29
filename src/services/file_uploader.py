@@ -11,13 +11,13 @@ import random
 load_dotenv()
 
 class FileUploader:
-    def __init__(self, organization_id: str, agent_id: str = None, bucket_name: str = 'call-recordings'):
+    def __init__(self, user_id: str, agent_id: str = None, bucket_name: str = 'call-recordings'):
         self.supabase: Client = create_client(
             os.getenv('SUPABASE_URL'),
             os.getenv('SUPABASE_KEY')
         )
         self.bucket_name = bucket_name
-        self.organization_id = organization_id
+        self.user_id = user_id
         self.agent_id = agent_id
         
     def ensure_bucket_exists(self):
@@ -33,6 +33,22 @@ class FileUploader:
             print(f"Error ensuring bucket exists: {str(e)}")
             raise
     
+    def get_random_agent(self) -> str:
+        """Get a random agent ID for the user"""
+        try:
+            response = self.supabase.table('agents') \
+                .select('id') \
+                .eq('user_id', self.user_id) \
+                .execute()
+            
+            if not response.data:
+                raise ValueError(f"No agents found for user_id: {self.user_id}")
+            
+            return random.choice(response.data)['id']
+        except Exception as e:
+            print(f"Error getting random agent: {str(e)}")
+            raise
+
     def upload_file(self, file_path: Path) -> Dict:
         """Upload a single file to Supabase storage"""
         try:
@@ -61,14 +77,17 @@ class FileUploader:
             if self.bucket_name == 'call-recordings':
                 duration = int(librosa.get_duration(path=str(file_path)))
                 now = datetime.now()
+                
+                # Get random agent if none specified
+                agent_id = self.agent_id or self.get_random_agent()
+                
                 db_entry = {
-                    'organization_id': self.organization_id,
-                    'agent_id': self.agent_id,
+                    'user_id': self.user_id,
+                    'agent_id': agent_id,
                     'recording_url': file_url,
                     'duration': duration,
                     'started_at': (now - timedelta(seconds=duration)).isoformat(),
                     'ended_at': now.isoformat(),
-                    'call_type': 'inbound',
                     'processed': False,
                     'resolution_status': 'pending'
                 }

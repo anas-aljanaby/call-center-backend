@@ -5,10 +5,11 @@ from pathlib import Path
 def main():
     parser = argparse.ArgumentParser(description='Upload audio files to Supabase')
     parser.add_argument('path', help='Path to file or directory to upload')
-    parser.add_argument('--agent-id', help='ID of the agent (from profiles table)', required=True)
+    parser.add_argument('--user-id', help='ID of the user', required=True)
+    parser.add_argument('--agent-id', help='ID of the agent (optional)')
     args = parser.parse_args()
     
-    uploader = FileUploader(agent_id=args.agent_id)
+    uploader = FileUploader(user_id=args.user_id, agent_id=args.agent_id)
     path = Path(args.path)
     
     if path.is_file():

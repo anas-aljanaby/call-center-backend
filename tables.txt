@@ -1,0 +1,39 @@
+Table: calls 
+columns:
+- id
+- user_id reference to auth.users.id (uuid)
+- agent_id reference to agents.id (uuid)
+- recording_url url to the recording in storage (text)
+- duration duration of the call in seconds (int4)
+- started_at timestamp of the call start (timestamptz)
+- ended_at timestamp of the call end (timestamptz)
+- resolution_status status of the call (text)
+- created_at timestamp of the call creation (timestamptz)
+- updated_at timestamp of the call update (timestamptz)
+- processed boolean if the call has been processed meaning it has been transcribed and analyzed and has a call_analytics record (boolean)
+
+Table: call_analytics
+columns:
+- id
+- call_id reference to calls.id (uuid)
+- sentiment_score sentiment score of the call (numeric)
+- transcription transcription of the call (jsonb) {"segments": [{"startTime": "string", "endTime": "string", "text": "string", "speaker?": "string", "channel?": "string", "sentiment?": "string"}]}
+- transcript_highlights highlights of the transcript (jsonb) [{"actor": "string", "action": "string", "timestamp": "string"}]
+- topics topics of the call (text[])
+- flags flags of the call (text[])
+- call_type type of the call (text) ["billing", "technical", "account", "other"]
+- summary summary of the call (text)
+- created_at timestamp of the call creation (timestamptz)
+- updated_at timestamp of the call update (timestamptz)
+
+Table: agents
+columns:
+- id
+- user_id reference to auth.users.id (uuid)
+- email email of the agent (text)
+- full_name full name of the agent (text)
+- avatar_url url to the avatar of the agent (text)
+- role role of the agent (varchar) ["agent"]
+- status status of the agent (varchar) ["online", "offline", "busy"]
+- created_at timestamp of the agent creation (timestamptz)
+- updated_at timestamp of the agent update (timestamptz)

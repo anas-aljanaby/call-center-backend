@@ -89,8 +89,9 @@ Guidelines:
 2. Group similar actions by the same actor together
 3. Use lowercase for actor values
 4. Remove any unnecessary words
-5. Focus only on significant actions/decisions
-6. Include the startTime of the segment where the event occurred as timestamp
+5. Focus only on significant actions/decisions 
+6. Only include actions that are crystal clear when not sure its better to leave it out
+7. Include the startTime of the segment where the event occurred as timestamp
 
 Only return the JSON object, no additional text.
 Conversation:
@@ -569,6 +570,64 @@ async def query_documents(request: QuestionRequest):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/analyze-call-details")
+async def analyze_call_details(request: ConversationRequest):
+    client = openai.OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
+    
+    conversation = "\n".join([
+        f"[{segment.speaker}]: {segment.text}"
+        for segment in request.segments
+    ])
+    
+    prompt = """
+    Analyze this customer service conversation and provide the following in JSON format:
+    1. sentiment_score: A score from 1.00 to 5.00 indicating overall conversation sentiment (1=very negative, 5=very positive)
+    2. topics: Array of main topics discussed (max 3 topics)
+    3. flags: Array of potential issues or concerns (e.g., "customer_angry", "refund_requested", "technical_issue")
+    4. call_type: One of ["billing", "technical", "account", "other"] based on the main purpose of the call
+    
+    Return JSON format:
+    {
+        "sentiment_score": float,
+        "topics": string[],
+        "flags": string[],
+        "call_type": string
+    }
+    """
+    
+    try:
+        response = client.chat.completions.create(
+            model=request.settings.aiModel,
+            messages=[
+                {"role": "system", "content": "You are a conversation analysis assistant specialized in customer service interactions."},
+                {"role": "user", "content": prompt + "\n\nConversation:\n" + conversation}
+            ],
+            temperature=0.3,
+            max_tokens=500
+        )
+        
+        response_text = response.choices[0].message.content.strip()
+        response_text = response_text.replace('```json', '').replace('```', '').strip()
+        
+        try:
+            result = json.loads(response_text)
+            return result
+        except json.JSONDecodeError:
+            print(f"Failed to parse response: {response_text}")
+            return {
+                "sentiment_score": 3.0,
+                "topics": [],
+                "flags": [],
+                "call_type": "other"
+            }
+            
+    except Exception as e:
+        print(f"Error in analyze_call_details: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error analyzing call details: {str(e)}"
+        )
 
 port = int(os.getenv("PORT", 8000))
 
