@@ -18,6 +18,9 @@ class VectorStore:
         embeddings: List[List[float]],
         metadata: DocumentMetadata
     ):
+        # Get UTC timestamp string
+        last_updated = metadata.get_utc_timestamp()
+        
         # First store document metadata
         doc_response = self.supabase.table('documents').insert({
             'title': metadata.title,
@@ -25,7 +28,13 @@ class VectorStore:
             'total_pages': metadata.total_pages,
             'file_size': metadata.file_size,
             'source_url': metadata.source_url,
-            'category': metadata.category
+            'category': metadata.category,
+            'summary': metadata.summary,
+            'tags': metadata.tags,
+            'helpful_rating': metadata.helpful_rating,
+            'use_count': metadata.use_count,
+            'last_updated': last_updated,
+            'ai_suggestion': metadata.ai_suggestion
         }).execute()
         
         document_id = doc_response.data[0]['id']
@@ -52,7 +61,7 @@ class VectorStore:
         # Create embedding for the query
         response = self.openai_client.embeddings.create(
             input=query,
-            model="text-embedding-3-small"
+            model="text-embedding-3-large"
         )
         query_embedding = response.data[0].embedding
 

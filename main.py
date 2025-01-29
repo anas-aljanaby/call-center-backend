@@ -20,6 +20,8 @@ from src.services.vector_store import VectorStore
 from src.models.document_models import DocumentMetadata
 from src.services.file_uploader import FileUploader
 from src.services.rag_service import RAGService
+from datetime import datetime
+import pytz
 
 load_dotenv()
 
@@ -482,35 +484,31 @@ async def summarize_conversation(request: ConversationRequest):
 async def upload_document(
     file: UploadFile = File(...),
     title: str = Form(...),
-    category: str = Form(...)
+    category: str = Form(...),
+    summary: Optional[str] = Form(None),
+    tags: Optional[str] = Form(None),
+    helpful_rate: Optional[int] = Form(None)
 ):
     try:
-        # Add logging
-        print(f"Received upload request - Title: {title}, Category: {category}, Filename: {file.filename}")
+        print(f"Received upload request - Title: {title}, Category: {category}, Summary: {summary}")
         
-        # Read file content
         content = await file.read()
         file_size = len(content)
         
-        # Save temporarily for processing
         temp_path = f"/tmp/{file.filename}"
         with open(temp_path, "wb") as f:
             f.write(content)
         
-        # Process document
         processor = DocumentProcessor()
         text_pages = processor.extract_text_from_pdf(temp_path)
         
-        # Create chunks
         all_chunks = []
         for text, page_num in text_pages:
             chunks = processor.create_chunks(text, file.filename, page_num)
             all_chunks.extend(chunks)
         
-        # Create embeddings
         embeddings = await processor.create_embeddings(all_chunks)
         
-        # Upload to Supabase storage
         file_uploader = FileUploader(
             organization_id="094c5956-44eb-467c-9468-02df3e2b6218",
             bucket_name='docs'
@@ -519,8 +517,13 @@ async def upload_document(
         
         if not upload_result['success']:
             raise Exception(f"Failed to upload file to storage: {upload_result.get('error', 'Unknown error')}")
+
+        # Parse tags from JSON string
+        parsed_tags = json.loads(tags) if tags else None
         
-        # Store in vector database
+        # Create UTC timestamp
+        utc_now = datetime.now(pytz.UTC)
+        
         vector_store = VectorStore()
         metadata = DocumentMetadata(
             title=title,
@@ -528,18 +531,21 @@ async def upload_document(
             total_pages=len(text_pages),
             file_size=file_size,
             source_url=upload_result['file_url'],
-            category=category
+            category=category,
+            summary=summary,
+            tags=parsed_tags,
+            helpful_rating=helpful_rate,
+            use_count=0,
+            last_updated=utc_now
         )
         
         await vector_store.store_document(all_chunks, embeddings, metadata)
         
-        # Cleanup
         os.remove(temp_path)
         
         return {"message": "Document processed successfully"}
         
     except Exception as e:
-        # Log the full error
         print(f"Error in upload_document: {str(e)}")
         import traceback
         print(traceback.format_exc())
@@ -548,7 +554,7 @@ async def upload_document(
 # Add this class for request validation
 class QuestionRequest(BaseModel):
     question: str
-    max_chunks: int = 5  # Optional with default value
+    max_chunks: int = 3  # Optional with default value
 
 @app.post("/api/documents/query")
 async def query_documents(request: QuestionRequest):
@@ -558,7 +564,9 @@ async def query_documents(request: QuestionRequest):
             question=request.question,
             max_chunks=request.max_chunks
         )
+        print(result)
         return result
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
