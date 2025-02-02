@@ -22,6 +22,7 @@ from src.services.file_uploader import FileUploader
 from src.services.rag_service import RAGService
 from datetime import datetime
 import pytz
+from src.services.call_processor import CallProcessor
 
 load_dotenv()
 
@@ -628,6 +629,25 @@ async def analyze_call_details(request: ConversationRequest):
             status_code=500,
             detail=f"Error analyzing call details: {str(e)}"
         )
+
+# @app.post("/api/process-calls")
+# async def process_calls():
+#     """Endpoint to process all unprocessed calls"""
+#     try:
+#         processor = CallProcessor()
+#         results = await processor.process_all_calls()
+        
+#         return {
+#             "success": True,
+#             "processed_count": len(results),
+#             "results": results
+#         }
+        
+#     except Exception as e:
+#         raise HTTPException(
+#             status_code=500,
+#             detail=f"Error processing calls: {str(e)}"
+#         )
 
 port = int(os.getenv("PORT", 8000))
 

@@ -28,8 +28,11 @@ class FileUploader:
             bucket_exists = any(bucket.name == self.bucket_name for bucket in buckets)
             
             if not bucket_exists:
-                self.supabase.storage.create_bucket(self.bucket_name)
-                print(f"Created bucket: {self.bucket_name}")
+                self.supabase.storage.create_bucket(
+                    self.bucket_name,
+                    options={'public': True}  # Make bucket public
+                )
+                print(f"Created public bucket: {self.bucket_name}")
         except Exception as e:
             print(f"Error ensuring bucket exists: {str(e)}")
             raise
@@ -68,11 +71,8 @@ class FileUploader:
                     {'content-type': mimetypes.guess_type(file_path)[0]}
                 )
             
-            # Get the private URL
-            file_url = self.supabase.storage.from_(self.bucket_name).create_signed_url(
-                unique_filename,
-                60 * 60 * 24  # 24 hour expiry
-            )['signedURL']
+            # Get the public URL
+            file_url = self.supabase.storage.from_(self.bucket_name).get_public_url(unique_filename)
 
             # If it's an audio file, create a call entry
             if self.bucket_name == 'call-recordings':

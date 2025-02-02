@@ -27,16 +27,8 @@ class CallProcessor:
     async def process_call(self, call_id: str, recording_url: str):
         """Process a single call"""
         try:
-            # Get signed URL for the recording
-            file_path = recording_url.split('/')[-1].split('?')[0]
-            signed_url = self.supabase.storage.from_(self.bucket_name).create_signed_url(
-                path=file_path,
-                expires_in=3600
-            )
-            download_url = signed_url['signedURL']
-            
-            # Download and prepare the audio file
-            response = requests.get(download_url)
+            # Download using the public URL directly
+            response = requests.get(recording_url)
             response.raise_for_status()
             files = {
                 'file': ('audio.wav', response.content, 'audio/wav')

@@ -1,4 +1,7 @@
 Table: calls 
+Table: calls 
+Table: calls 
+Table: calls 
 columns:
 - id
 - user_id reference to auth.users.id (uuid)
