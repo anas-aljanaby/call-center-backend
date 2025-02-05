@@ -1,19 +1,53 @@
-Table: calls 
-Table: calls 
-Table: calls 
-Table: calls 
+Table: organizations
+columns:
+- id
+- name text
+- description text
+- created_at timestamp of the organization creation (timestamptz)
+- updated_at timestamp of the organization update (timestamptz)
+
+Table: roles
+columns:
+- id
+- name text ["admin", "agent", "user"]
+- description text
+- created_at timestamp of the organization creation (timestamptz)
+- updated_at timestamp of the organization update (timestamptz)
+
+Table: user_roles
 columns:
 - id
 - user_id reference to auth.users.id (uuid)
+- role_id reference to roles.id (uuid)
+- organization_id reference to organizations.id (uuid)
+- created_at timestamp of the role assignment creation (timestamptz)
+- updated_at timestamp of the role assignment update (timestamptz)
+
+Table: agents
+columns:
+- id
+- user_id reference to auth.users.id (uuid)
+- organization_id reference to organizations.id (uuid)
+- email email of the agent (text)
+- full_name full name of the agent (text)
+- avatar_url url to the avatar of the agent (text)
+- status status of the agent (varchar) ["online", "offline", "busy"]
+- created_at timestamp of the agent creation (timestamptz)
+- updated_at timestamp of the agent update (timestamptz)
+
+Table: calls
+columns:
+- id
+- organization_id reference to organizations.id (uuid)
 - agent_id reference to agents.id (uuid)
 - recording_url url to the recording in storage (text)
-- duration duration of the call in seconds (int4)
+- duration duration of the call in seconds (float4)
 - started_at timestamp of the call start (timestamptz)
 - ended_at timestamp of the call end (timestamptz)
-- resolution_status status of the call (text)
+- resolution_status status of the call (text) ["resolved", "pending"]
 - created_at timestamp of the call creation (timestamptz)
 - updated_at timestamp of the call update (timestamptz)
-- processed boolean if the call has been processed meaning it has been transcribed and analyzed and has a call_analytics record (boolean)
+- processed boolean if the call has been processed (boolean)
 
 Table: call_analytics
 columns:
@@ -28,15 +62,3 @@ columns:
 - summary summary of the call (text)
 - created_at timestamp of the call creation (timestamptz)
 - updated_at timestamp of the call update (timestamptz)
-
-Table: agents
-columns:
-- id
-- user_id reference to auth.users.id (uuid)
-- email email of the agent (text)
-- full_name full name of the agent (text)
-- avatar_url url to the avatar of the agent (text)
-- role role of the agent (varchar) ["agent"]
-- status status of the agent (varchar) ["online", "offline", "busy"]
-- created_at timestamp of the agent creation (timestamptz)
-- updated_at timestamp of the agent update (timestamptz)

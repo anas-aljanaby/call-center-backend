@@ -7,17 +7,19 @@ from dotenv import load_dotenv
 import mimetypes
 import librosa
 import random
+from pydub import AudioSegment
+import pytz
 
 load_dotenv()
 
 class FileUploader:
-    def __init__(self, user_id: str, agent_id: str = None, bucket_name: str = 'call-recordings'):
+    def __init__(self, organization_id: str, agent_id: str = None, bucket_name: str = 'call-recordings'):
         self.supabase: Client = create_client(
             os.getenv('SUPABASE_URL'),
             os.getenv('SUPABASE_KEY')
         )
         self.bucket_name = bucket_name
-        self.user_id = user_id
+        self.organization_id = organization_id
         self.agent_id = agent_id
         self.ensure_bucket_exists()
         
@@ -42,71 +44,61 @@ class FileUploader:
         try:
             response = self.supabase.table('agents') \
                 .select('id') \
-                .eq('user_id', self.user_id) \
+                .eq('user_id', self.organization_id) \
                 .execute()
             
             if not response.data:
-                raise ValueError(f"No agents found for user_id: {self.user_id}")
+                raise ValueError(f"No agents found for user_id: {self.organization_id}")
             
             return random.choice(response.data)['id']
         except Exception as e:
             print(f"Error getting random agent: {str(e)}")
             raise
 
-    def upload_file(self, file_path: Path) -> Dict:
-        """Upload a single file to Supabase storage"""
+    def upload_file(self, file_path: Path) -> dict:
         try:
-            if not file_path.exists():
-                raise FileNotFoundError(f"File not found: {file_path}")
-            
-            # Generate unique filename
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            unique_filename = f"{timestamp}_{file_path.name}"
-            
             # Upload file to storage
             with open(file_path, 'rb') as f:
-                self.supabase.storage.from_(self.bucket_name).upload(
-                    unique_filename,
-                    f.read(),
-                    {'content-type': mimetypes.guess_type(file_path)[0]}
+                # Get audio duration using mutagen or similar library
+                audio = AudioSegment.from_mp3(file_path)
+                duration = len(audio) / 1000  # Convert milliseconds to seconds
+                
+                response = self.supabase.storage.from_(self.bucket_name).upload(
+                    str(file_path.name),
+                    f
                 )
             
-            # Get the public URL
-            file_url = self.supabase.storage.from_(self.bucket_name).get_public_url(unique_filename)
-
-            # If it's an audio file, create a call entry
-            if self.bucket_name == 'call-recordings':
-                duration = int(librosa.get_duration(path=str(file_path)))
-                now = datetime.now()
-                
-                # Get random agent if none specified
-                agent_id = self.agent_id or self.get_random_agent()
-                
-                db_entry = {
-                    'user_id': self.user_id,
-                    'agent_id': agent_id,
-                    'recording_url': file_url,
-                    'duration': duration,
-                    'started_at': (now - timedelta(seconds=duration)).isoformat(),
-                    'ended_at': now.isoformat(),
-                    'processed': False,
-                    'resolution_status': 'pending'
-                }
-                response = self.supabase.table('calls').insert(db_entry).execute()
-                return {
-                    'success': True,
-                    'file_url': file_url,
-                    'db_record': response.data[0] if response.data else None
-                }
+            # Get public URL
+            file_url = self.supabase.storage.from_(self.bucket_name).get_public_url(file_path.name)
             
-            # For non-audio files
-            return {
-                'success': True,
-                'file_url': file_url
+            # Get current time for start time
+            now = datetime.now(pytz.UTC)
+            started_at = now
+            ended_at = started_at + timedelta(seconds=duration)
+            
+            # Randomly select resolution status
+            resolution_status = random.choice(['resolved', 'pending'])
+            
+            # Create call record
+            call_data = {
+                'organization_id': self.organization_id,
+                'agent_id': self.agent_id,
+                'recording_url': file_url,
+                'duration': duration,
+                'started_at': started_at.isoformat(),
+                'ended_at': ended_at.isoformat(),
+                'resolution_status': resolution_status,
+                'processed': False
             }
             
+            response = self.supabase.table('calls').insert(call_data).execute()
+            
+            return {
+                'success': True,
+                'call_id': response.data[0]['id'] if response.data else None
+            }
         except Exception as e:
-            print(f"Error uploading file {file_path}: {str(e)}")
+            print(f"Error uploading {file_path.name}: {str(e)}")
             return {
                 'success': False,
                 'error': str(e)

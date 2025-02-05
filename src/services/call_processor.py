@@ -3,6 +3,7 @@ import os
 import requests
 from dotenv import load_dotenv
 import json
+import asyncio
 
 load_dotenv()
 
@@ -18,13 +19,12 @@ class CallProcessor:
     def fetch_unprocessed_calls(self):
         """Fetch all unprocessed calls from the calls table"""
         response = self.supabase.table('calls') \
-            .select('id, recording_url') \
+            .select('id, recording_url, organization_id') \
             .eq('processed', False) \
             .execute()
-        
         return response.data
         
-    async def process_call(self, call_id: str, recording_url: str):
+    async def process_call(self, call_id: str, recording_url: str, organization_id: str):
         """Process a single call"""
         try:
             # Download using the public URL directly
@@ -52,7 +52,7 @@ class CallProcessor:
                 f"{self.api_url}/api/analyze-events",
                 json={
                     'segments': transcription_data['segments'],
-                    'settings': {"aiModel": "gpt-4o"}
+                    'settings': {"aiModel": "gpt-4"}
                 }
             )
             events_data = events_response.json()
@@ -62,7 +62,7 @@ class CallProcessor:
                 f"{self.api_url}/api/summarize-conversation",
                 json={
                     'segments': transcription_data['segments'],
-                    'settings': {"aiModel": "gpt-4o"}
+                    'settings': {"aiModel": "gpt-4"}
                 }
             )
             summary_data = summary_response.json()
@@ -72,7 +72,7 @@ class CallProcessor:
                 f"{self.api_url}/api/analyze-call-details",
                 json={
                     'segments': transcription_data['segments'],
-                    'settings': {"aiModel": "gpt-4o"}
+                    'settings': {"aiModel": "gpt-4"}
                 }
             )
             details_data = details_response.json()
@@ -80,15 +80,16 @@ class CallProcessor:
             # Update call_analytics table
             analytics_data = {
                 'call_id': call_id,
-                'sentiment_score': details_data['sentiment_score'],
+                'sentiment_score': details_data.get('sentiment_score'),
                 'transcription': transcription_data['segments'],
-                'transcript_highlights': events_data['key_events'],
-                'topics': details_data['topics'],
-                'flags': details_data['flags'],
-                'call_type': details_data['call_type'],
-                'summary': summary_data['summary']
+                'transcript_highlights': events_data.get('key_events', []),
+                'topics': details_data.get('topics', []),
+                'flags': details_data.get('flags', []),
+                'call_type': details_data.get('call_type', 'other'),
+                'summary': summary_data.get('summary', '')
             }
             
+            # Insert analytics data
             self.supabase.table('call_analytics').insert(analytics_data).execute()
             
             # Mark call as processed
@@ -112,11 +113,18 @@ class CallProcessor:
     
     async def process_all_calls(self):
         """Process all unprocessed calls"""
-        calls = self.fetch_unprocessed_calls()
-        results = []
+        unprocessed_calls = self.fetch_unprocessed_calls()
+        tasks = []
         
-        for call in calls:
-            result = await self.process_call(call['id'], call['recording_url'])
-            results.append(result)
-                
+        for call in unprocessed_calls:
+            task = asyncio.create_task(
+                self.process_call(
+                    call['id'], 
+                    call['recording_url'],
+                    call['organization_id']
+                )
+            )
+            tasks.append(task)
+        
+        results = await asyncio.gather(*tasks)
         return results 
