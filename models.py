@@ -3,7 +3,7 @@ from typing import Optional
 
 class ProcessingSettings(BaseModel):
     # AI Model Settings
-    aiModel: str = 'gpt-3.5-turbo'
+    aiModel: str = 'deepseek/deepseek-r1:free'
     
     # Transcription Settings
     transcriptionModel: str = 'real'

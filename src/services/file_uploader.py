@@ -13,28 +13,49 @@ import pytz
 load_dotenv()
 
 class FileUploader:
-    def __init__(self, organization_id: str, agent_id: str = None, bucket_name: str = 'call-recordings'):
+    def __init__(self, bucket_name: str = 'documents'):
         self.supabase: Client = create_client(
             os.getenv('SUPABASE_URL'),
             os.getenv('SUPABASE_KEY')
         )
         self.bucket_name = bucket_name
-        self.organization_id = organization_id
-        self.agent_id = agent_id
         self.ensure_bucket_exists()
         
     def ensure_bucket_exists(self):
         """Ensure the storage bucket exists"""
         try:
+            # List all buckets
             buckets = self.supabase.storage.list_buckets()
             bucket_exists = any(bucket.name == self.bucket_name for bucket in buckets)
             
             if not bucket_exists:
+                # Create bucket with public access and file size limit
                 self.supabase.storage.create_bucket(
                     self.bucket_name,
-                    options={'public': True}  # Make bucket public
+                    options={
+                        'public': 'true',
+                        'file_size_limit': 52428800,  # 50MB limit
+                        'allowed_mime_types': [
+                            'application/pdf',
+                            'application/msword',
+                            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                            'text/plain',
+                            'text/markdown',
+                            'audio/mpeg',
+                            'audio/wav',
+                            'audio/ogg'
+                        ]
+                    }
                 )
                 print(f"Created public bucket: {self.bucket_name}")
+            
+            # Verify bucket exists and is accessible
+            try:
+                self.supabase.storage.from_(self.bucket_name).list()
+            except Exception as e:
+                print(f"Error accessing bucket {self.bucket_name}: {str(e)}")
+                raise
+                
         except Exception as e:
             print(f"Error ensuring bucket exists: {str(e)}")
             raise
@@ -55,21 +76,53 @@ class FileUploader:
             print(f"Error getting random agent: {str(e)}")
             raise
 
-    def upload_file(self, file_path: Path) -> dict:
+    def upload_file(self, file_path: Path, original_filename: str = None) -> dict:
         try:
-            # Upload file to storage
+            # Use original filename if provided, otherwise use the path's filename
+            filename = original_filename or file_path.name
+            
+            # Sanitize filename - remove special characters and spaces
+            safe_filename = "".join(c for c in filename if c.isalnum() or c in ('-', '_', '.'))
+            
+            # Create storage path
+            storage_path = safe_filename
+            
+            # Upload file to storage with proper headers
             with open(file_path, 'rb') as f:
-                # Get audio duration using mutagen or similar library
-                audio = AudioSegment.from_mp3(file_path)
-                duration = len(audio) / 1000  # Convert milliseconds to seconds
+                mime_type, _ = mimetypes.guess_type(filename)
+                if not mime_type:
+                    mime_type = 'application/octet-stream'
                 
                 response = self.supabase.storage.from_(self.bucket_name).upload(
-                    str(file_path.name),
-                    f
+                    path=storage_path,
+                    file=f,
+                    file_options={
+                        "contentType": mime_type,
+                        "upsert": "true"
+                    }
                 )
             
             # Get public URL
-            file_url = self.supabase.storage.from_(self.bucket_name).get_public_url(file_path.name)
+            file_url = self.supabase.storage.from_(self.bucket_name).get_public_url(storage_path)
+            
+            return {
+                'success': True,
+                'file_url': file_url
+            }
+            
+        except Exception as e:
+            print(f"Error uploading {filename}: {str(e)}")
+            return {
+                'success': False,
+                'error': str(e)
+            }
+
+    def _handle_call_recording(self, file_path: Path, file_url: str) -> dict:
+        """Handle the specific case of uploading call recordings"""
+        try:
+            # Get audio duration
+            audio = AudioSegment.from_mp3(file_path)
+            duration = int(len(audio) / 1000)  # Convert milliseconds to seconds
             
             # Get current time for start time
             now = datetime.now(pytz.UTC)
@@ -95,10 +148,11 @@ class FileUploader:
             
             return {
                 'success': True,
-                'call_id': response.data[0]['id'] if response.data else None
+                'call_id': response.data[0]['id'] if response.data else None,
+                'file_url': file_url
             }
         except Exception as e:
-            print(f"Error uploading {file_path.name}: {str(e)}")
+            print(f"Error handling call recording {file_path.name}: {str(e)}")
             return {
                 'success': False,
                 'error': str(e)

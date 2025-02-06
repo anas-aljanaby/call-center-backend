@@ -2,11 +2,12 @@ from typing import List, Dict
 import openai
 import os
 from src.services.vector_store import VectorStore
+from src.utils.openai_client import get_openai_client
 
 class RAGService:
     def __init__(self):
         self.vector_store = VectorStore()
-        self.openai_client = openai.OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
+        self.openai_client = get_openai_client()
         
     async def get_answer(self, question: str, max_chunks: int = 5) -> Dict:
         # Get relevant chunks
@@ -29,7 +30,7 @@ class RAGService:
         ]
         
         response = self.openai_client.chat.completions.create(
-            model="gpt-3.5-turbo",
+            model="deepseek/deepseek-r1:free",
             messages=messages,
             temperature=0.3,
             max_tokens=500

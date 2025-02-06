@@ -11,16 +11,41 @@ def test_bucket_access():
     )
     
     try:
-        # List buckets
-        buckets = supabase.storage.list_buckets()
-        print("Available buckets:", buckets)
-        
-        # Try to list files in the call-recordings bucket
-        files = supabase.storage.from_('call-recordings').list()
-        print("Files in bucket:", files)
-        
+        # Check documents bucket
+        print("\nTesting 'documents' bucket:")
+        try:
+            files = supabase.storage.from_('documents').list()
+            print("✓ Documents bucket accessible")
+            print("Files:", files)
+            
+            # Test upload
+            test_file = 'test.txt'
+            with open(test_file, 'w') as f:
+                f.write('test content')
+            
+            with open(test_file, 'rb') as f:
+                try:
+                    response = supabase.storage.from_('documents').upload(
+                        'test.txt',
+                        f,
+                        file_options={"contentType": "text/plain", "upsert": "true"}
+                    )
+                    print("✓ Test file upload successful")
+                    
+                    # Try to get URL
+                    url = supabase.storage.from_('documents').get_public_url('test.txt')
+                    print("✓ Public URL retrieved:", url)
+                except Exception as upload_error:
+                    print(f"✗ Upload test failed: {str(upload_error)}")
+            
+            # Clean up
+            os.remove(test_file)
+            
+        except Exception as e:
+            print(f"✗ Error accessing documents bucket: {str(e)}")
+            
     except Exception as e:
-        print(f"Error accessing bucket: {str(e)}")
+        print(f"Error in test: {str(e)}")
 
 if __name__ == "__main__":
     test_bucket_access()

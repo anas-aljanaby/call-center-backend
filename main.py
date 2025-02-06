@@ -23,6 +23,7 @@ from src.services.rag_service import RAGService
 from datetime import datetime
 import pytz
 from src.services.call_processor import CallProcessor
+from src.utils.openai_client import get_openai_client
 
 load_dotenv()
 
@@ -40,7 +41,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-MODEL = "gpt-3.5-turbo"
+MODEL = "deepseek/deepseek-r1:free"
 
 
 NEURALSPACE_API_KEY = os.getenv('NEURALSPACE_API_KEY')
@@ -240,7 +241,7 @@ class LabelingRequest(BaseModel):
 
 @app.post("/api/label-segments")
 async def label_segments(request: LabelingRequest):
-    client = openai.OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
+    client = get_openai_client()
 
     label_descriptions = "\n".join([
         f"- {label.name}: {label.description}"
@@ -307,7 +308,7 @@ class ChecklistRequest(BaseModel):
 
 @app.post("/api/analyze-checklist")
 async def analyze_checklist(request: ChecklistRequest):
-    client = openai.OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
+    client = get_openai_client()
     
     # Prepare the segments text with numbers
     numbered_segments = "\n".join([
@@ -395,12 +396,10 @@ class ConversationRequest(BaseModel):
 
 @app.post("/api/analyze-events")
 async def analyze_events(request: ConversationRequest):
-    client = openai.OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
+    client = get_openai_client()
     
     # Convert the segments to JSON format
     conversation_json = json.dumps([segment.dict() for segment in request.segments], ensure_ascii=False, indent=2)
-    print(f"Conversation JSON being sent for analysis: {conversation_json}")
-    
     try:
         response = client.chat.completions.create(
             model=request.settings.aiModel,
@@ -409,28 +408,44 @@ async def analyze_events(request: ConversationRequest):
                 {"role": "user", "content": EVENTS_PROMPT + conversation_json}
             ],
             temperature=0.3,
-            max_tokens=500
+            max_tokens=100
         )
         
+        print(response)
         response_text = response.choices[0].message.content.strip()
-        print(f"Raw response text: {response_text}")  # Debugging line
+        print(f"Raw response text from OpenAI: {response_text}")  # Debug logging
         
+        # Clean the response text
         response_text = response_text.replace('```json', '').replace('```', '').strip()
         
         try:
             result = json.loads(response_text)
+            if not result or 'events' not in result:
+                print(f"Invalid response structure: {result}")
+                # Return a valid default structure
+                return {
+                    "segments": [segment.dict() for segment in request.segments],
+                    "key_events": []
+                }
+            
             key_events = result.get("events", [])
-        except json.JSONDecodeError:
-            print(f"Failed to parse response: {response_text}")
-            key_events = []
-        
-        return {
-            "segments": [segment.dict() for segment in request.segments],
-            "key_events": key_events
-        }
+            return {
+                "segments": [segment.dict() for segment in request.segments],
+                "key_events": key_events
+            }
+            
+        except json.JSONDecodeError as e:
+            print(f"Failed to parse response as JSON: {response_text}")
+            print(f"JSON decode error: {str(e)}")
+            # Return a valid default structure
+            return {
+                "segments": [segment.dict() for segment in request.segments],
+                "key_events": []
+            }
         
     except Exception as e:
         print(f"Error in analyze_events: {str(e)}")
+        print(f"Full error details: {e.__class__.__name__}")
         raise HTTPException(
             status_code=500,
             detail=f"Error analyzing conversation events: {str(e)}"
@@ -441,7 +456,7 @@ class SummaryRequest(BaseModel):
 
 @app.post("/api/summarize-conversation")
 async def summarize_conversation(request: ConversationRequest):
-    client = openai.OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
+    client = get_openai_client()
     
     conversation = "\n".join([
         f"[{segment.speaker}]: {segment.text}"
@@ -485,20 +500,21 @@ async def summarize_conversation(request: ConversationRequest):
 @app.post("/api/documents/upload")
 async def upload_document(
     file: UploadFile = File(...),
-    user_id: str = Form(...),
     metadata: str = Form(...)
 ):
-    """Upload a document file to storage and process it"""
     try:
+        print("\n=== Starting document upload process ===")
+        print(f"File: {file.filename}")
+        
         # Parse metadata
         metadata_dict = json.loads(metadata)
+        print(f"Metadata: {metadata_dict}")
         metadata_obj = DocumentMetadata(**metadata_dict)
         
         # Initialize services
-        file_uploader = FileUploader(
-            user_id=user_id,
-            bucket_name='docs'
-        )
+        file_uploader = FileUploader(bucket_name='documents')
+        processor = DocumentProcessor()
+        vector_store = VectorStore()
         
         # Upload file and get URL
         with NamedTemporaryFile(delete=False, suffix=Path(file.filename).suffix) as temp_file:
@@ -506,50 +522,54 @@ async def upload_document(
             temp_file.write(content)
             temp_file.flush()
             
-            # Upload to storage
-            result = file_uploader.upload_file(Path(temp_file.name))
+            print("Uploading file to storage...")
+            result = file_uploader.upload_file(
+                Path(temp_file.name),
+                original_filename=file.filename
+            )
             if not result['success']:
                 raise HTTPException(
                     status_code=500,
                     detail=f"Failed to upload file: {result.get('error', 'Unknown error')}"
                 )
             
-            # Update metadata with file URL
+            print("File uploaded successfully")
             metadata_obj.source_url = result['file_url']
             metadata_obj.file_size = len(content)
             metadata_obj.last_updated = datetime.now(pytz.UTC)
             
-            # Process document
-            processor = DocumentProcessor()
+            print("Processing document...")
             chunks = await processor.process_document(temp_file.name, metadata_obj)
+            print(f"Document processed into {len(chunks)} chunks")
             
-            # Get embeddings for chunks
-            embeddings = []
-            for chunk in chunks:
-                response = processor.openai_client.embeddings.create(
-                    input=chunk.content,
-                    model="text-embedding-ada-002"
-                )
-                embeddings.append(response.data[0].embedding)
+            print("Getting embeddings...")
+            embeddings = await processor.get_embeddings(chunks)
+            print(f"Generated {len(embeddings)} embeddings")
             
-            # Store in vector database
-            vector_store = VectorStore()
-            await vector_store.store_document(chunks, embeddings, metadata_obj)
+            print("Storing in vector database...")
+            try:
+                document_id = await vector_store.store_document(chunks, embeddings, metadata_obj)
+                print(f"Document stored with ID: {document_id}")
+            except Exception as ve:
+                print(f"Vector store error details: {str(ve)}")
+                raise
             
             return {
                 "success": True,
                 "message": "Document uploaded and processed successfully",
+                "document_id": document_id,
                 "file_url": result['file_url']
             }
             
     except Exception as e:
-        print(f"Error in upload_document: {str(e)}")
+        print(f"\n!!! Error in upload_document !!!")
+        print(f"Error type: {type(e)}")
+        print(f"Error message: {str(e)}")
         raise HTTPException(
             status_code=500,
             detail=f"Error uploading document: {str(e)}"
         )
     finally:
-        # Clean up temp file
         if 'temp_file' in locals():
             os.unlink(temp_file.name)
 
@@ -574,7 +594,7 @@ async def query_documents(request: QuestionRequest):
 
 @app.post("/api/analyze-call-details")
 async def analyze_call_details(request: ConversationRequest):
-    client = openai.OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
+    client = get_openai_client()
     
     conversation = "\n".join([
         f"[{segment.speaker}]: {segment.text}"

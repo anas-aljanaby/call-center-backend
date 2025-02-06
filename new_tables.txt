@@ -1,0 +1,116 @@
+Table: organizations
+columns:
+- id
+- name text
+- description text
+- created_at timestamp of the organization creation (timestamptz)
+- updated_at timestamp of the organization update (timestamptz)
+
+Table: roles
+columns:
+- id
+- name text ["admin", "agent"]
+- description text
+- created_at timestamp of the organization creation (timestamptz)
+- updated_at timestamp of the organization update (timestamptz)
+
+Table: user_roles
+columns:
+- id
+- user_id reference to auth.users.id (uuid)
+- role_id reference to roles.id (uuid)
+- organization_id reference to organizations.id (uuid)
+- created_at timestamp of the role assignment creation (timestamptz)
+- updated_at timestamp of the role assignment update (timestamptz)
+
+Table: agents
+columns:
+- id
+- user_id reference to auth.users.id (uuid)
+- organization_id reference to organizations.id (uuid)
+- email email of the agent (text)
+- full_name full name of the agent (text)
+- avatar_url url to the avatar of the agent (text)
+- status status of the agent (varchar) ["online", "offline", "busy"]
+- created_at timestamp of the agent creation (timestamptz)
+- updated_at timestamp of the agent update (timestamptz)
+
+Table: agent_performance
+columns:
+- id
+- agent_id reference to agents.id (uuid)
+- calls_handled number of calls handled by the agent (int4)
+- avg_handle_time average handle time of the agent in seconds (float4)
+- resolution_rate resolution rate of the agent (numeric)
+- satisfaction_score satisfaction score of the agent (numeric)
+- quality_score quality score of the agent (numeric)
+- created_at timestamp of the agent performance creation (timestamptz)
+- updated_at timestamp of the agent performance update (timestamptz)
+
+Table: calls
+columns:
+- id
+- organization_id reference to organizations.id (uuid)
+- agent_id reference to agents.id (uuid)
+- recording_url url to the recording in storage (text)
+- duration duration of the call in seconds (float4)
+- started_at timestamp of the call start (timestamptz)
+- ended_at timestamp of the call end (timestamptz)
+- resolution_status status of the call (text) ["resolved", "pending"]
+- created_at timestamp of the call creation (timestamptz)
+- updated_at timestamp of the call update (timestamptz)
+- processed boolean if the call has been processed (boolean)
+
+Table: call_analytics
+columns:
+- id
+- call_id reference to calls.id (uuid)
+- sentiment_score sentiment score of the call (numeric)
+- transcription transcription of the call (jsonb) {"segments": [{"startTime": "string", "endTime": "string", "text": "string", "speaker?": "string", "channel?": "string", "sentiment?": "string"}]}
+- transcript_highlights highlights of the transcript (jsonb) [{"actor": "string", "action": "string", "timestamp": "string"}]
+- topics topics of the call (text[])
+- flags flags of the call (text[])
+- call_type type of the call (text) ["billing", "technical", "account", "other"]
+- summary summary of the call (text)
+- note note of the call (text)
+- created_at timestamp of the call creation (timestamptz)
+- updated_at timestamp of the call update (timestamptz)
+
+Table: documents
+columns:
+- id
+- title title of the document (text)
+- file_type type of the document (text) 
+- total_pages total pages of the document (int4)
+- file_size size of the document in bytes (int4)
+- source_url url to the document in storage (text)
+- created_at timestamp of the document creation (timestamptz)
+- category category of the document (enum) ["technical", "policies", "billing", "product"] 
+- last_updated timestamp of the document update (timestamptz)
+- use_count number of times the document has been used (int4)
+- helpful_rating helpful rating of the document (float4)
+- ai_suggestion ai suggestion of the document (text)
+- summary summary of the document (text)
+- tags tags of the document (text[])
+- comment comment of the document (text)
+
+Table: document_chunks
+columns:
+- id primary key (uuid)
+- document_id reference to documents table (uuid)
+- content text content of the chunk (text)
+- embedding vector embedding of the chunk (vector(1536))
+- page_number page number of the chunk (integer)
+- chunk_number chunk number in sequence (integer)
+- created_at timestamp of creation (timestamptz)
+- updated_at timestamp of last update (timestamptz)
+
+Table: insights
+columns:
+- id
+- title title of the insight (text)
+- description description of the insight (text)
+- trend trend of the insight (text) ["up", "down", "neutral"]
+- change change of the insight (text) [ie "-10%", "+10%", "0%"]
+- created_at timestamp of the insight creation (timestamptz)
+- updated_at timestamp of the insight update (timestamptz)

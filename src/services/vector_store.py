@@ -2,7 +2,8 @@ from supabase import create_client
 import os
 from typing import List, Dict
 from src.models.document_models import DocumentChunk, DocumentMetadata
-import openai
+from openai import OpenAI
+import numpy as np
 
 class VectorStore:
     def __init__(self):
@@ -10,7 +11,9 @@ class VectorStore:
             os.getenv('SUPABASE_URL'),
             os.getenv('SUPABASE_KEY')
         )
-        self.openai_client = openai.OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
+        self.openai_client = OpenAI(
+            api_key=os.getenv('OPENAI_API_KEY'),
+        )
 
     async def store_document(
         self,
@@ -18,39 +21,51 @@ class VectorStore:
         embeddings: List[List[float]],
         metadata: DocumentMetadata
     ):
-        # Get UTC timestamp string
-        last_updated = metadata.get_utc_timestamp()
-        
-        # First store document metadata
-        doc_response = self.supabase.table('documents').insert({
-            'title': metadata.title,
-            'file_type': metadata.file_type,
-            'total_pages': metadata.total_pages,
-            'file_size': metadata.file_size,
-            'source_url': metadata.source_url,
-            'category': metadata.category,
-            'summary': metadata.summary,
-            'tags': metadata.tags,
-            'helpful_rating': metadata.helpful_rating,
-            'use_count': metadata.use_count,
-            'last_updated': last_updated,
-            'ai_suggestion': metadata.ai_suggestion
-        }).execute()
-        
-        document_id = doc_response.data[0]['id']
+        try:
+            # Get UTC timestamp string
+            last_updated = metadata.get_utc_timestamp()
+            
+            # Store document metadata
+            doc_data = {
+                'title': metadata.title,
+                'file_type': metadata.file_type,
+                'total_pages': metadata.total_pages or 0,
+                'file_size': metadata.file_size,
+                'source_url': metadata.source_url,
+                'category': metadata.category,
+                'summary': metadata.summary,
+                'tags': metadata.tags,
+                'helpful_rating': metadata.helpful_rating or 0,
+                'use_count': metadata.use_count or 0,
+                'last_updated': last_updated,
+                'ai_suggestion': metadata.ai_suggestion
+            }
+            
+            doc_response = self.supabase.table('documents').insert(doc_data).execute()
+            document_id = doc_response.data[0]['id']
 
-        # Store chunks with embeddings
-        chunks_data = []
-        for chunk, embedding in zip(chunks, embeddings):
-            chunks_data.append({
-                'document_id': document_id,
-                'content': chunk.content,
-                'embedding': embedding,
-                'page_number': chunk.page_number,
-                'chunk_number': chunk.chunk_number
-            })
-        
-        self.supabase.table('document_chunks').insert(chunks_data).execute()
+            # Store chunks with embeddings
+            chunks_data = []
+            for i, (chunk, embedding) in enumerate(zip(chunks, embeddings)):
+                embedding_array = np.array(embedding, dtype=np.float32)
+                chunks_data.append({
+                    'document_id': document_id,
+                    'content': chunk.content,
+                    'embedding': embedding_array.tolist(),
+                    'page_number': chunk.page_number or 1,
+                    'chunk_number': i + 1
+                })
+            
+            # Insert chunks in batches
+            batch_size = 5
+            for i in range(0, len(chunks_data), batch_size):
+                batch = chunks_data[i:i + batch_size]
+                self.supabase.table('document_chunks').insert(batch).execute()
+            
+            return document_id
+            
+        except Exception as e:
+            raise
 
     async def search_similar_chunks(
         self,
@@ -59,19 +74,14 @@ class VectorStore:
         match_count: int = 3
     ) -> List[Dict]:
         try:
-            # Create embedding for the query
             response = self.openai_client.embeddings.create(
                 input=query,
-                model="text-embedding-ada-002"  # Match the model used in storage
+                model="text-embedding-3-small"
             )
             query_embedding = response.data[0].embedding
 
-            # Debug print
-            print(f"Generated query embedding of length: {len(query_embedding)}")
-
-            # Search for similar chunks using the match_chunks function
             result = self.supabase.rpc(
-                'match_chunks',
+                'match_document_chunks',
                 {
                     'query_embedding': query_embedding,
                     'match_threshold': match_threshold,
@@ -79,31 +89,21 @@ class VectorStore:
                 }
             ).execute()
 
-            # Debug print
-            print(f"RPC result: {result.data}")
-
-            # Join with documents table to get source information
             chunks = result.data
             if chunks:
-                # Get document information for the chunks
                 doc_ids = list(set(chunk['document_id'] for chunk in chunks))
                 docs = self.supabase.table('documents').select('*').in_('id', doc_ids).execute()
                 doc_map = {doc['id']: doc for doc in docs.data}
                 
-                # Add source information to chunks
                 for chunk in chunks:
                     doc = doc_map.get(chunk['document_id'])
                     if doc:
                         chunk['source'] = doc['title']
                         chunk['similarity'] = chunk.get('similarity', 0.0)
-                        print(f"Found chunk from document: {doc['title']}")  # Debug print
                 
-                print(f"Found {len(chunks)} relevant chunks")
                 return chunks
-
-            print("No matching chunks found")
+            
             return []
             
         except Exception as e:
-            print(f"Error in search_similar_chunks: {str(e)}")
-            return [] 
+            raise

@@ -7,13 +7,19 @@ from src.models.document_models import DocumentChunk, DocumentMetadata
 import os
 import docx
 import asyncio
+from src.utils.openai_client import get_openai_client
+from openai import OpenAI
 
 class DocumentProcessor:
     def __init__(self):
         self.tokenizer = tiktoken.get_encoding("cl100k_base")
         self.chunk_size = 1000
         self.chunk_overlap = 200
-        self.openai_client = openai.OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
+        self.openai_client = get_openai_client()
+        # Create a separate OpenAI client for embeddings
+        self.embeddings_client = OpenAI(
+            api_key=os.getenv('OPENAI_API_KEY'),
+        )
 
     async def process_document(self, file_path: str, metadata: DocumentMetadata) -> List[DocumentChunk]:
         """Process a document and return chunks"""
@@ -123,6 +129,20 @@ class DocumentProcessor:
                 )
             )
         return chunks
+
+    async def get_embeddings(self, chunks):
+        try:
+            embeddings = []
+            for chunk in chunks:
+                response = self.embeddings_client.embeddings.create(
+                    input=chunk.content,
+                    model="text-embedding-3-small"
+                )
+                embeddings.append(response.data[0].embedding)
+            return embeddings
+        except Exception as e:
+            print(f"Error in get_embeddings: {str(e)}")
+            raise Exception(f"Error getting embeddings: {str(e)}")
 
     async def create_embeddings(self, chunks: List[DocumentChunk]) -> List[List[float]]:
         embeddings = []
