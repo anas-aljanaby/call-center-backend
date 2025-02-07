@@ -21,16 +21,16 @@ class DocumentMetadata(BaseModel):
     helpful_rating: Optional[int] = None
     use_count: Optional[int] = 0
     ai_suggestion: Optional[str] = None
-    last_updated: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
 
     def get_utc_timestamp(self) -> Optional[str]:
-        """Convert last_updated to UTC timezone string"""
-        if self.last_updated:
-            if self.last_updated.tzinfo is None:
+        """Convert updated_at to UTC timezone string"""
+        if self.updated_at:
+            if self.updated_at.tzinfo is None:
                 # If no timezone set, assume UTC
-                utc_dt = pytz.UTC.localize(self.last_updated)
+                utc_dt = pytz.UTC.localize(self.updated_at)
             else:
                 # Convert to UTC if it has a different timezone
-                utc_dt = self.last_updated.astimezone(pytz.UTC)
+                utc_dt = self.updated_at.astimezone(pytz.UTC)
             return utc_dt.isoformat()
         return None 

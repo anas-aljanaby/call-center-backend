@@ -86,7 +86,7 @@ columns:
 - source_url url to the document in storage (text)
 - created_at timestamp of the document creation (timestamptz)
 - category category of the document (enum) ["technical", "policies", "billing", "product"] 
-- last_updated timestamp of the document update (timestamptz)
+- updated_at timestamp of the document update (timestamptz)
 - use_count number of times the document has been used (int4)
 - helpful_rating helpful rating of the document (float4)
 - ai_suggestion ai suggestion of the document (text)

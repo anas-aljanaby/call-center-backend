@@ -23,7 +23,7 @@ class VectorStore:
     ):
         try:
             # Get UTC timestamp string
-            last_updated = metadata.get_utc_timestamp()
+            updated_at = metadata.get_utc_timestamp()
             
             # Store document metadata
             doc_data = {
@@ -37,7 +37,7 @@ class VectorStore:
                 'tags': metadata.tags,
                 'helpful_rating': metadata.helpful_rating or 0,
                 'use_count': metadata.use_count or 0,
-                'last_updated': last_updated,
+                'updated_at': updated_at,
                 'ai_suggestion': metadata.ai_suggestion
             }
             
