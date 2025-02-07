@@ -536,7 +536,7 @@ async def upload_document(
             print("File uploaded successfully")
             metadata_obj.source_url = result['file_url']
             metadata_obj.file_size = len(content)
-            metadata_obj.last_updated = datetime.now(pytz.UTC)
+            metadata_obj.updated_at = datetime.now(pytz.UTC)
             
             print("Processing document...")
             chunks = await processor.process_document(temp_file.name, metadata_obj)
