@@ -41,8 +41,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-MODEL = "deepseek/deepseek-r1:free"
-
 
 NEURALSPACE_API_KEY = os.getenv('NEURALSPACE_API_KEY')
 if not NEURALSPACE_API_KEY:
@@ -238,10 +236,11 @@ class Segment(BaseModel):
 class LabelingRequest(BaseModel):
     segments: List[Segment]
     possible_labels: List[LabelDefinition]
+    settings: ProcessingSettings
 
 @app.post("/api/label-segments")
 async def label_segments(request: LabelingRequest):
-    client = get_openai_client()
+    client = get_openai_client(request.settings.labelsModel)
 
     label_descriptions = "\n".join([
         f"- {label.name}: {label.description}"
@@ -266,7 +265,7 @@ Only respond with the JSON object, no additional text.
 """
         try:
             response = client.chat.completions.create(
-                model=MODEL,
+                model=request.settings.labelsModel,
                 messages=[
                     {"role": "system", "content": "You are a conversation analysis assistant."},
                     {"role": "user", "content": prompt}
@@ -305,10 +304,11 @@ class TranscriptSegment(BaseModel):
 class ChecklistRequest(BaseModel):
     segments: List[TranscriptSegment]
     checklist: List[str]
+    settings: ProcessingSettings
 
 @app.post("/api/analyze-checklist")
 async def analyze_checklist(request: ChecklistRequest):
-    client = get_openai_client()
+    client = get_openai_client(request.settings.checklistModel)
     
     # Prepare the segments text with numbers
     numbered_segments = "\n".join([
@@ -343,7 +343,7 @@ async def analyze_checklist(request: ChecklistRequest):
     
     try:
         response = client.chat.completions.create(
-            model=MODEL,
+            model=request.settings.checklistModel,
             messages=[
                 {"role": "system", "content": "You are a conversation analysis assistant."},
                 {"role": "user", "content": prompt}
@@ -396,13 +396,13 @@ class ConversationRequest(BaseModel):
 
 @app.post("/api/analyze-events")
 async def analyze_events(request: ConversationRequest):
-    client = get_openai_client()
+    client = get_openai_client(request.settings.eventsModel)
     
     # Convert the segments to JSON format
     conversation_json = json.dumps([segment.dict() for segment in request.segments], ensure_ascii=False, indent=2)
     try:
         response = client.chat.completions.create(
-            model=request.settings.aiModel,
+            model=request.settings.eventsModel,
             messages=[
                 {"role": "system", "content": "You are a conversation analysis assistant specialized in Arabic customer service interactions."},
                 {"role": "user", "content": EVENTS_PROMPT + conversation_json}
@@ -456,7 +456,7 @@ class SummaryRequest(BaseModel):
 
 @app.post("/api/summarize-conversation")
 async def summarize_conversation(request: ConversationRequest):
-    client = get_openai_client()
+    client = get_openai_client(request.settings.summaryModel)
     
     conversation = "\n".join([
         f"[{segment.speaker}]: {segment.text}"
@@ -465,7 +465,7 @@ async def summarize_conversation(request: ConversationRequest):
     
     try:
         response = client.chat.completions.create(
-            model=request.settings.aiModel,
+            model=request.settings.summaryModel,
             messages=[
                 {"role": "system", "content": "You are a conversation analysis assistant specialized in Arabic customer service interactions."},
                 {"role": "user", "content": SUMMARY_PROMPT + conversation}
@@ -594,7 +594,7 @@ async def query_documents(request: QuestionRequest):
 
 @app.post("/api/analyze-call-details")
 async def analyze_call_details(request: ConversationRequest):
-    client = get_openai_client()
+    client = get_openai_client(request.settings.detailsModel)
     
     conversation = "\n".join([
         f"[{segment.speaker}]: {segment.text}"
@@ -619,7 +619,7 @@ async def analyze_call_details(request: ConversationRequest):
     
     try:
         response = client.chat.completions.create(
-            model=request.settings.aiModel,
+            model=request.settings.detailsModel,
             messages=[
                 {"role": "system", "content": "You are a conversation analysis assistant specialized in customer service interactions."},
                 {"role": "user", "content": prompt + "\n\nConversation:\n" + conversation}

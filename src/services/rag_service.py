@@ -7,7 +7,10 @@ from src.utils.openai_client import get_openai_client
 class RAGService:
     def __init__(self):
         self.vector_store = VectorStore()
-        self.openai_client = get_openai_client()
+        self.embedding_model = "text-embedding-3-small"
+        self.generation_model = "gpt-4o"
+        self.openai_client = get_openai_client(self.generation_model)
+        self.embeddings_client = get_openai_client()
         
     async def get_answer(self, question: str, max_chunks: int = 5) -> Dict:
         # Get relevant chunks
@@ -30,7 +33,7 @@ class RAGService:
         ]
         
         response = self.openai_client.chat.completions.create(
-            model="deepseek/deepseek-r1:free",
+            model=self.generation_model,
             messages=messages,
             temperature=0.3,
             max_tokens=500
@@ -47,4 +50,11 @@ class RAGService:
                 }
                 for chunk in chunks
             ]
-        } 
+        }
+
+    async def create_embeddings(self, text: str) -> List[float]:
+        response = self.embeddings_client.embeddings.create(
+            input=text,
+            model=self.embedding_model
+        )
+        return response.data[0].embedding 

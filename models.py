@@ -1,9 +1,14 @@
 from pydantic import BaseModel
 from typing import Optional
 
+
 class ProcessingSettings(BaseModel):
-    # AI Model Settings
-    aiModel: str = 'deepseek/deepseek-r1:free'
+    # AI Model Settings for different endpoints
+    summaryModel: str = 'o3-mini'
+    eventsModel: str = 'o3-mini'
+    labelsModel: str = 'o3-mini'
+    detailsModel: str = 'o3-mini'
+    checklistModel: str = 'o3-mini'
     
     # Transcription Settings
     transcriptionModel: str = 'real'

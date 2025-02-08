@@ -8,11 +8,14 @@ from rich import print as rprint
 from rich.console import Console
 from rich.panel import Panel
 from time import time
+import sys
+from pathlib import Path
+sys.path.append(str(Path(__file__).parent.parent.parent))
+from models import ProcessingSettings
 
 load_dotenv()
 console = Console()
 
-MODEL = "deepseek/deepseek-r1:nitro"
 class CallProcessor:
     def __init__(self, skip_transcription=False):
         self.supabase: Client = create_client(
@@ -22,6 +25,7 @@ class CallProcessor:
         self.api_url = "http://localhost:8000"
         self.bucket_name = 'call-recordings'
         self.skip_transcription = skip_transcription
+        self.settings = ProcessingSettings()
         
     def fetch_unprocessed_calls(self):
         """Fetch all unprocessed calls from the calls table"""
@@ -97,7 +101,7 @@ class CallProcessor:
             events_settings = {
                 'segments': transcription_data['segments'][:1],
                 'settings': {
-                    "aiModel": MODEL
+                    "aiModel": self.settings.eventsModel
                 }
             }
             console.print(f"Settings: {json.dumps(events_settings, indent=2)}")
@@ -108,7 +112,7 @@ class CallProcessor:
                 json={
                     'segments': transcription_data['segments'],
                     'settings': {
-                        "aiModel": MODEL
+                        "aiModel": self.settings.eventsModel
                     }
                 }
             )
@@ -126,7 +130,7 @@ class CallProcessor:
             summary_settings = {
                 'segments': transcription_data['segments'][:1],
                 'settings': {
-                    "aiModel": MODEL
+                    "aiModel": self.settings.summaryModel
                 }
             }
             console.print(f"Settings: {json.dumps(summary_settings, indent=2)}")
@@ -137,7 +141,7 @@ class CallProcessor:
                 json={
                     'segments': transcription_data['segments'],
                     'settings': {
-                        "aiModel": MODEL
+                        "aiModel": self.settings.summaryModel
                     }
                 }
             )
@@ -155,7 +159,7 @@ class CallProcessor:
             details_settings = {
                 'segments': transcription_data['segments'][:1],
                 'settings': {
-                    "aiModel": MODEL
+                    "aiModel": self.settings.detailsModel
                 }
             }
             console.print(f"Settings: {json.dumps(details_settings, indent=2)}")
@@ -166,7 +170,7 @@ class CallProcessor:
                 json={
                     'segments': transcription_data['segments'],
                     'settings': {
-                        "aiModel": MODEL
+                        "aiModel": self.settings.detailsModel
                     }
                 }
             )
