@@ -33,7 +33,7 @@ class FileUploader:
                 self.supabase.storage.create_bucket(
                     self.bucket_name,
                     options={
-                        'public': 'true',
+                        'public': 'false',
                         'file_size_limit': 52428800,  # 50MB limit
                         'allowed_mime_types': [
                             'application/pdf',
@@ -76,46 +76,34 @@ class FileUploader:
             print(f"Error getting random agent: {str(e)}")
             raise
 
-    def upload_file(self, file_path: Path, original_filename: str = None) -> dict:
-        try:
-            # Use original filename if provided, otherwise use the path's filename
-            filename = original_filename or file_path.name
-            
-            # Sanitize filename - remove special characters and spaces
-            safe_filename = "".join(c for c in filename if c.isalnum() or c in ('-', '_', '.'))
-            
-            # Create storage path
-            storage_path = safe_filename
-            
-            # Upload file to storage with proper headers
-            with open(file_path, 'rb') as f:
-                mime_type, _ = mimetypes.guess_type(filename)
-                if not mime_type:
-                    mime_type = 'application/octet-stream'
-                
-                response = self.supabase.storage.from_(self.bucket_name).upload(
-                    path=storage_path,
-                    file=f,
-                    file_options={
-                        "contentType": mime_type,
-                        "upsert": "true"
-                    }
-                )
-            
-            # Get public URL
-            file_url = self.supabase.storage.from_(self.bucket_name).get_public_url(storage_path)
-            
-            return {
-                'success': True,
-                'file_url': file_url
-            }
-            
-        except Exception as e:
-            print(f"Error uploading {filename}: {str(e)}")
-            return {
-                'success': False,
-                'error': str(e)
-            }
+    def upload_file(self, file_path: Path, original_filename: str = None) -> Dict:
+        """Upload a single file to Supabase storage"""
+        if not file_path.exists():
+            raise FileNotFoundError(f"File not found: {file_path}")
+        
+        # Generate unique filename
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        unique_filename = f"{original_filename}_{timestamp}"
+        
+        # Upload file to storage
+        with open(file_path, 'rb') as f:
+            self.supabase.storage.from_(self.bucket_name).upload(
+                unique_filename,
+                f.read(),
+                {'content-type': mimetypes.guess_type(file_path)[0]}
+            )
+        
+        # Get the private URL
+        file_url = self.supabase.storage.from_(self.bucket_name).create_signed_url(
+            unique_filename,
+            60 * 60 * 24  # 24 hour expiry
+        )['signedURL']
+
+        # For non-audio files
+        return {
+            'success': True,
+            'file_url': file_url
+        }
 
     def _handle_call_recording(self, file_path: Path, file_url: str) -> dict:
         """Handle the specific case of uploading call recordings"""

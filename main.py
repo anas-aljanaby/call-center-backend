@@ -24,10 +24,17 @@ from datetime import datetime
 import pytz
 from src.services.call_processor import CallProcessor
 from src.utils.openai_client import get_openai_client
+from supabase import create_client
 
 load_dotenv()
 
 app = FastAPI()
+
+# Initialize Supabase client
+supabase = create_client(
+    os.getenv('SUPABASE_URL'),
+    os.getenv('SUPABASE_KEY')
+)
 
 app.add_middleware(
     CORSMiddleware,
@@ -650,24 +657,28 @@ async def analyze_call_details(request: ConversationRequest):
             detail=f"Error analyzing call details: {str(e)}"
         )
 
-# @app.post("/api/process-calls")
-# async def process_calls():
-#     """Endpoint to process all unprocessed calls"""
-#     try:
-#         processor = CallProcessor()
-#         results = await processor.process_all_calls()
+
+@app.get("/api/documents/{document_id}/url")
+async def get_document_url(document_id: str):
+    try:
+        # Get document from database
+        result = supabase.table('documents').select('*').eq('id', document_id).single().execute()
+        if not result.data:
+            raise HTTPException(status_code=404, detail="Document not found")
+            
+        document = result.data
         
-#         return {
-#             "success": True,
-#             "processed_count": len(results),
-#             "results": results
-#         }
+        # Generate fresh signed URL
+        signed_url = supabase.storage.from_('documents').create_signed_url(
+            path=document['source_url'].split('/')[-1],  # Get filename from source_url
+            expires_in=3600  # URL expires in 1 hour
+        )
         
-#     except Exception as e:
-#         raise HTTPException(
-#             status_code=500,
-#             detail=f"Error processing calls: {str(e)}"
-#         )
+        return {
+            "url": signed_url['signedURL']
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 port = int(os.getenv("PORT", 8000))
 
