@@ -503,25 +503,23 @@ async def summarize_conversation(request: ConversationRequest):
             status_code=500,
             detail=f"Error summarizing conversation: {str(e)}"
         )
-
 @app.post("/api/documents/upload")
 async def upload_document(
     file: UploadFile = File(...),
+    # user_id: str = Form(...),
     metadata: str = Form(...)
 ):
+    """Upload a document file to storage and process it"""
     try:
-        print("\n=== Starting document upload process ===")
-        print(f"File: {file.filename}")
-        
         # Parse metadata
         metadata_dict = json.loads(metadata)
-        print(f"Metadata: {metadata_dict}")
         metadata_obj = DocumentMetadata(**metadata_dict)
         
         # Initialize services
-        file_uploader = FileUploader(bucket_name='documents')
-        processor = DocumentProcessor()
-        vector_store = VectorStore()
+        file_uploader = FileUploader(
+            # user_id=user_id,
+            bucket_name='docs'
+        )
         
         # Upload file and get URL
         with NamedTemporaryFile(delete=False, suffix=Path(file.filename).suffix) as temp_file:
@@ -529,54 +527,50 @@ async def upload_document(
             temp_file.write(content)
             temp_file.flush()
             
-            print("Uploading file to storage...")
-            result = file_uploader.upload_file(
-                Path(temp_file.name),
-                original_filename=file.filename
-            )
+            # Upload to storage
+            result = file_uploader.upload_file(Path(temp_file.name))
             if not result['success']:
                 raise HTTPException(
                     status_code=500,
                     detail=f"Failed to upload file: {result.get('error', 'Unknown error')}"
                 )
             
-            print("File uploaded successfully")
+            # Update metadata with file URL
             metadata_obj.source_url = result['file_url']
             metadata_obj.file_size = len(content)
-            metadata_obj.updated_at = datetime.now(pytz.UTC)
+            metadata_obj.last_updated = datetime.now(pytz.UTC)
             
-            print("Processing document...")
+            # Process document
+            processor = DocumentProcessor()
             chunks = await processor.process_document(temp_file.name, metadata_obj)
-            print(f"Document processed into {len(chunks)} chunks")
             
-            print("Getting embeddings...")
-            embeddings = await processor.get_embeddings(chunks)
-            print(f"Generated {len(embeddings)} embeddings")
+            # Get embeddings for chunks
+            embeddings = []
+            for chunk in chunks:
+                response = processor.openai_client.embeddings.create(
+                    input=chunk.content,
+                    model="text-embedding-3-small"
+                )
+                embeddings.append(response.data[0].embedding)
             
-            print("Storing in vector database...")
-            try:
-                document_id = await vector_store.store_document(chunks, embeddings, metadata_obj)
-                print(f"Document stored with ID: {document_id}")
-            except Exception as ve:
-                print(f"Vector store error details: {str(ve)}")
-                raise
+            # Store in vector database
+            vector_store = VectorStore()
+            await vector_store.store_document(chunks, embeddings, metadata_obj)
             
             return {
                 "success": True,
                 "message": "Document uploaded and processed successfully",
-                "document_id": document_id,
                 "file_url": result['file_url']
             }
             
     except Exception as e:
-        print(f"\n!!! Error in upload_document !!!")
-        print(f"Error type: {type(e)}")
-        print(f"Error message: {str(e)}")
+        print(f"Error in upload_document: {str(e)}")
         raise HTTPException(
             status_code=500,
             detail=f"Error uploading document: {str(e)}"
         )
     finally:
+        # Clean up temp file
         if 'temp_file' in locals():
             os.unlink(temp_file.name)
 

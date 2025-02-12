@@ -20,42 +20,16 @@ class FileUploader:
         )
         self.bucket_name = bucket_name
         self.ensure_bucket_exists()
-        
+
     def ensure_bucket_exists(self):
         """Ensure the storage bucket exists"""
         try:
-            # List all buckets
             buckets = self.supabase.storage.list_buckets()
             bucket_exists = any(bucket.name == self.bucket_name for bucket in buckets)
             
             if not bucket_exists:
-                # Create bucket with public access and file size limit
-                self.supabase.storage.create_bucket(
-                    self.bucket_name,
-                    options={
-                        'public': 'false',
-                        'file_size_limit': 52428800,  # 50MB limit
-                        'allowed_mime_types': [
-                            'application/pdf',
-                            'application/msword',
-                            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-                            'text/plain',
-                            'text/markdown',
-                            'audio/mpeg',
-                            'audio/wav',
-                            'audio/ogg'
-                        ]
-                    }
-                )
-                print(f"Created public bucket: {self.bucket_name}")
-            
-            # Verify bucket exists and is accessible
-            try:
-                self.supabase.storage.from_(self.bucket_name).list()
-            except Exception as e:
-                print(f"Error accessing bucket {self.bucket_name}: {str(e)}")
-                raise
-                
+                self.supabase.storage.create_bucket(self.bucket_name)
+                print(f"Created bucket: {self.bucket_name}")
         except Exception as e:
             print(f"Error ensuring bucket exists: {str(e)}")
             raise

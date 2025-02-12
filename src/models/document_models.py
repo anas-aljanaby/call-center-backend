@@ -22,6 +22,7 @@ class DocumentMetadata(BaseModel):
     use_count: Optional[int] = 0
     ai_suggestion: Optional[str] = None
     updated_at: Optional[datetime] = None
+    last_updated: Optional[datetime] = None
 
     def get_utc_timestamp(self) -> Optional[str]:
         """Convert updated_at to UTC timezone string"""
