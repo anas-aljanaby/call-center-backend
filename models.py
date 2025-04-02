@@ -5,7 +5,7 @@ from typing import Optional
 class ProcessingSettings(BaseModel):
     # AI Model Settings for different endpoints
     summaryModel: str = 'o3-mini'
-    eventsModel: str = 'o3-mini'
+    eventsModel: str = 'gpt-4o'
     labelsModel: str = 'o3-mini'
     detailsModel: str = 'o3-mini'
     checklistModel: str = 'o3-mini'

@@ -415,7 +415,7 @@ async def analyze_events(request: ConversationRequest):
                 {"role": "user", "content": EVENTS_PROMPT + conversation_json}
             ],
             temperature=0.3,
-            max_tokens=100
+            # max_tokens=100
         )
         
         print(response)
@@ -518,7 +518,7 @@ async def upload_document(
         # Initialize services
         file_uploader = FileUploader(
             # user_id=user_id,
-            bucket_name='docs'
+            bucket_name='documents'
         )
         
         # Upload file and get URL
