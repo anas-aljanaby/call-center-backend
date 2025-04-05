@@ -73,7 +73,6 @@ The input data is structured as a list of segments, each with the following fiel
 - endTime: The end time of the segment in seconds.
 - text: The spoken text in the segment.
 - speaker: The speaker identifier (e.g., "Speaker 0", "Speaker 1").
-- channel: The audio channel number.
 
 Format your response as a JSON object with this structure:
 {
@@ -237,7 +236,6 @@ class Segment(BaseModel):
     endTime: float
     text: str
     speaker: str
-    channel: int
     label: Optional[str] = None
 
 class LabelingRequest(BaseModel):
@@ -305,7 +303,6 @@ class TranscriptSegment(BaseModel):
     endTime: float
     text: str
     speaker: Optional[str] = None
-    channel: Optional[int] = None
     sentiment: str = "neutral"  # Optional with default value
 
 class ChecklistRequest(BaseModel):
@@ -395,7 +392,6 @@ class ConversationSegment(BaseModel):
     endTime: float
     text: str
     speaker: str
-    channel: int
 
 class ConversationRequest(BaseModel):
     segments: List[ConversationSegment]

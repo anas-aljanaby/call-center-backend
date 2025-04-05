@@ -12,6 +12,7 @@ import sys
 from pathlib import Path
 sys.path.append(str(Path(__file__).parent.parent.parent))
 from models import ProcessingSettings
+from src.services.transcription_service import ElevenLabsTranscriptionService
 
 load_dotenv()
 console = Console()
@@ -26,6 +27,7 @@ class CallProcessor:
         self.bucket_name = 'call-recordings'
         self.skip_transcription = skip_transcription
         self.settings = ProcessingSettings()
+        self.transcription_service = ElevenLabsTranscriptionService()
         
     def fetch_unprocessed_calls(self):
         """Fetch all unprocessed calls from the calls table"""
@@ -55,7 +57,7 @@ class CallProcessor:
                     .execute()
                     
                 if existing_analytics.data and existing_analytics.data[0].get('transcription'):
-                    transcription_data = {'segments': existing_analytics.data[0]['transcription']}
+                    transcription_segments = existing_analytics.data[0]['transcription']
                     console.print("[green]✓ Using existing transcription[/green]")
                     step_times['transcription'] = time() - step_start
                     console.print(f"[blue]⏱ Transcription step took: {step_times['transcription']:.2f} seconds[/blue]")
@@ -68,29 +70,25 @@ class CallProcessor:
                 console.print("[yellow]Downloading audio file...[/yellow]")
                 response = requests.get(recording_url)
                 response.raise_for_status()
-                files = {
-                    'file': ('audio.wav', response.content, 'audio/wav')
-                }
                 console.print("[green]✓ Audio file downloaded successfully[/green]")
                 
-                # Step 1: Transcribe
-                settings = {
-                    "transcriptionModel": "real",
-                    "languageId": "ar-ir",
-                    "sentimentDetect": False
-                }
-                console.print("\n[bold]Step 1: Transcribing audio[/bold]")
-                console.print(f"Settings: {json.dumps(settings, indent=2)}")
+                # Step 1: Transcribe using ElevenLabs
+                console.print("\n[bold]Step 1: Transcribing audio with ElevenLabs[/bold]")
+                language_code = "ara"  # Using Arabic as default based on previous settings
+                num_speakers = 2
                 
-                transcription_response = requests.post(
-                    f"{self.api_url}/api/transcribe",
-                    files=files,
-                    data={'settings': json.dumps(settings)}
+                console.print(f"Settings: language_code={language_code}, num_speakers={num_speakers}")
+                
+                # Use the ElevenLabs transcription service
+                transcription_segments = self.transcription_service.transcribe_from_bytes(
+                    audio_bytes=response.content,
+                    language_code=language_code,
+                    num_speakers=num_speakers
                 )
-                transcription_data = transcription_response.json()
+                
                 console.print("[green]✓ Transcription complete[/green]")
                 console.print(Panel(
-                    f"[cyan]Transcription Response:[/cyan]\n{json.dumps(transcription_data, indent=2)}",
+                    f"[cyan]Transcription Response:[/cyan]\n{json.dumps(transcription_segments, indent=2, ensure_ascii=False)}",
                     title="Transcription Result"
                 ))
                 step_times['transcription'] = time() - step_start
@@ -99,7 +97,7 @@ class CallProcessor:
             # Step 2: Get events analysis
             console.print("\n[bold]Step 2: Analyzing events[/bold]")
             events_settings = {
-                'segments': transcription_data['segments'][:1],
+                'segments': transcription_segments[:1],
                 'settings': {
                     "aiModel": self.settings.eventsModel
                 }
@@ -110,7 +108,7 @@ class CallProcessor:
             events_response = requests.post(
                 f"{self.api_url}/api/analyze-events",
                 json={
-                    'segments': transcription_data['segments'],
+                    'segments': transcription_segments,
                     'settings': {
                         "aiModel": self.settings.eventsModel
                     }
@@ -128,7 +126,7 @@ class CallProcessor:
             # Step 3: Get conversation summary
             console.print("\n[bold]Step 3: Generating conversation summary[/bold]")
             summary_settings = {
-                'segments': transcription_data['segments'][:1],
+                'segments': transcription_segments[:1],
                 'settings': {
                     "aiModel": self.settings.summaryModel
                 }
@@ -139,7 +137,7 @@ class CallProcessor:
             summary_response = requests.post(
                 f"{self.api_url}/api/summarize-conversation",
                 json={
-                    'segments': transcription_data['segments'],
+                    'segments': transcription_segments,
                     'settings': {
                         "aiModel": self.settings.summaryModel
                     }
@@ -157,7 +155,7 @@ class CallProcessor:
             # Step 4: Get additional analytics
             console.print("\n[bold]Step 4: Analyzing call details[/bold]")
             details_settings = {
-                'segments': transcription_data['segments'][:1],
+                'segments': transcription_segments[:1],
                 'settings': {
                     "aiModel": self.settings.detailsModel
                 }
@@ -168,7 +166,7 @@ class CallProcessor:
             details_response = requests.post(
                 f"{self.api_url}/api/analyze-call-details",
                 json={
-                    'segments': transcription_data['segments'],
+                    'segments': transcription_segments,
                     'settings': {
                         "aiModel": self.settings.detailsModel
                     }
@@ -188,7 +186,7 @@ class CallProcessor:
             analytics_data = {
                 'call_id': call_id,
                 'sentiment_score': details_data.get('sentiment_score'),
-                'transcription': transcription_data['segments'],
+                'transcription': transcription_segments,
                 'transcript_highlights': events_data.get('key_events', []),
                 'topics': details_data.get('topics', []),
                 'flags': details_data.get('flags', []),
