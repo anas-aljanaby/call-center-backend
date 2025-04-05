@@ -13,12 +13,14 @@ import pytz
 load_dotenv()
 
 class FileUploader:
-    def __init__(self, bucket_name: str = 'documents'):
+    def __init__(self, organization_id: str = None, agent_id: str = None, bucket_name: str = 'documents'):
         self.supabase: Client = create_client(
             os.getenv('SUPABASE_URL'),
             os.getenv('SUPABASE_KEY')
         )
         self.bucket_name = bucket_name
+        self.organization_id = organization_id
+        self.agent_id = agent_id
         self.ensure_bucket_exists()
 
     def ensure_bucket_exists(self):
@@ -39,11 +41,11 @@ class FileUploader:
         try:
             response = self.supabase.table('agents') \
                 .select('id') \
-                .eq('user_id', self.organization_id) \
+                .eq('organization_id', self.organization_id) \
                 .execute()
             
             if not response.data:
-                raise ValueError(f"No agents found for user_id: {self.organization_id}")
+                raise ValueError(f"No agents found for organization_id: {self.organization_id}")
             
             return random.choice(response.data)['id']
         except Exception as e:
@@ -55,9 +57,21 @@ class FileUploader:
         if not file_path.exists():
             raise FileNotFoundError(f"File not found: {file_path}")
         
+        # Determine if this is an audio file (call recording)
+        audio_extensions = {'.mp3', '.wav', '.m4a', '.flac', '.ogg', '.aac', '.wma'}
+        is_audio = file_path.suffix.lower() in audio_extensions
+        
+        # Set the appropriate bucket for the file type
+        if is_audio and self.organization_id:
+            # For call recordings, use the call-recordings bucket
+            original_bucket = self.bucket_name
+            self.bucket_name = 'call-recordings'
+            self.ensure_bucket_exists()
+        
         # Generate unique filename
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        unique_filename = f"{original_filename}_{timestamp}"
+        filename = original_filename or file_path.name
+        unique_filename = f"{filename}_{timestamp}"
         
         # Upload file to storage
         with open(file_path, 'rb') as f:
@@ -73,7 +87,20 @@ class FileUploader:
             60 * 60 * 24  # 24 hour expiry
         )['signedURL']
 
-        # For non-audio files
+        # For audio files, handle as call recording if organization_id is provided
+        if is_audio and self.organization_id and self.agent_id:
+            result = self._handle_call_recording(file_path, file_url)
+            
+            # Restore original bucket name if it was changed
+            if 'original_bucket' in locals():
+                self.bucket_name = original_bucket
+                
+            return result
+        
+        # For non-audio files or when org_id is not provided
+        if 'original_bucket' in locals():
+            self.bucket_name = original_bucket
+            
         return {
             'success': True,
             'file_url': file_url
@@ -83,7 +110,7 @@ class FileUploader:
         """Handle the specific case of uploading call recordings"""
         try:
             # Get audio duration
-            audio = AudioSegment.from_mp3(file_path)
+            audio = AudioSegment.from_file(file_path)
             duration = int(len(audio) / 1000)  # Convert milliseconds to seconds
             
             # Get current time for start time

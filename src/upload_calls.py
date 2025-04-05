@@ -4,7 +4,7 @@ import argparse
 from pathlib import Path
 
 
-audio_extensions = {'.mp3', '.wav', '.m4a', '.ogg'}
+audio_extensions = {'.mp3', '.wav', '.m4a', '.ogg', '.flac', '.aac', '.wma'}
 
 def main():
     parser = argparse.ArgumentParser(description='Upload audio files to Supabase')
@@ -27,11 +27,21 @@ def main():
             print(f"Error: {str(e)}")
             return
 
-    # Initialize uploader with organization context
-    uploader = FileUploader(organization_id=args.org_id, agent_id=agent_id)
     path = Path(args.path)
     
     if path.is_file():
+        # For single file upload, determine bucket based on file type
+        if path.suffix.lower() in audio_extensions:
+            # For audio files, use call-recordings bucket
+            uploader = FileUploader(
+                organization_id=args.org_id, 
+                agent_id=agent_id,
+                bucket_name='call-recordings'  # Explicitly set bucket for call recordings
+            )
+        else:
+            # For other files, use documents bucket
+            uploader = FileUploader(bucket_name='documents')
+            
         result = uploader.upload_file(path)
         status = "✓" if result['success'] else "✗"
         print(f"{status} {path.name}")
@@ -39,11 +49,21 @@ def main():
         results = []
         for file_path in path.glob('*.*'):
             if file_path.suffix.lower() in audio_extensions:
+                # For audio files, use call-recordings bucket
                 # For directories, optionally get a new random agent for each file
                 if not args.agent_id:
                     agent = agent_manager.get_random_agent()
-                uploader.agent_id = agent['id']
-                print(f"Selected agent for {file_path.name}: {agent['full_name']}")
+                    agent_id = agent['id']
+                    print(f"Selected agent for {file_path.name}: {agent['full_name']}")
+                
+                uploader = FileUploader(
+                    organization_id=args.org_id, 
+                    agent_id=agent_id,
+                    bucket_name='call-recordings'  # Explicitly set bucket for call recordings
+                )
+            else:
+                # For other files, use documents bucket
+                uploader = FileUploader(bucket_name='documents')
             
             result = uploader.upload_file(file_path)
             results.append(result)
