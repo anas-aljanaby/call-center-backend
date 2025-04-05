@@ -1,6 +1,6 @@
 from elevenlabs import ElevenLabs
 
-client = ElevenLabs(api_key="sk_4b444ea2d6edd9634c1a6e70ae241ece0230c320016ff590")
+client = ElevenLabs(api_key="")
 
 
 res = client.speech_to_text.convert(

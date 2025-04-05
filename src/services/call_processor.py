@@ -75,7 +75,7 @@ class CallProcessor:
                 # Step 1: Transcribe using ElevenLabs
                 console.print("\n[bold]Step 1: Transcribing audio with ElevenLabs[/bold]")
                 language_code = "ara"  # Using Arabic as default based on previous settings
-                num_speakers = 2
+                num_speakers = 3
                 
                 console.print(f"Settings: language_code={language_code}, num_speakers={num_speakers}")
                 
