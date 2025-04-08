@@ -160,7 +160,7 @@ class CallProcessor:
                 call_logger.info("Step 1: Transcribing audio with ElevenLabs")
                 
                 language_code = "ara"  # Using Arabic as default based on previous settings
-                num_speakers = 3
+                num_speakers = 2
                 
                 console.print(f"Settings: language_code={language_code}, num_speakers={num_speakers}")
                 call_logger.info(f"Transcription settings: language_code={language_code}, num_speakers={num_speakers}")
@@ -175,6 +175,40 @@ class CallProcessor:
                 
                 console.print("[green]✓ Transcription complete[/green]")
                 call_logger.info("Transcription complete")
+                
+                # Check if only one speaker was detected
+                speaker_ids = set()
+                for segment in transcription_segments:
+                    if 'speaker' in segment:
+                        speaker_ids.add(segment['speaker'])
+                
+                # If only one speaker was detected, retry with 3 speakers
+                if len(speaker_ids) <= 1 and num_speakers == 2:
+                    console.print("[yellow]Only one speaker detected. Retrying transcription with 3 speakers...[/yellow]")
+                    call_logger.warning("Only one speaker detected. Retrying transcription with 3 speakers")
+                    
+                    # Update num_speakers for retry
+                    num_speakers = 3
+                    
+                    # Retry transcription with 3 speakers
+                    call_logger.info("Sending transcription request to ElevenLabs with 3 speakers")
+                    transcription_segments = self.transcription_service.transcribe_from_bytes(
+                        audio_bytes=response.content,
+                        language_code=language_code,
+                        num_speakers=num_speakers
+                    )
+                    
+                    console.print("[green]✓ Retry transcription complete[/green]")
+                    call_logger.info("Retry transcription complete")
+                    
+                    # Check speakers after retry
+                    retry_speaker_ids = set()
+                    for segment in transcription_segments:
+                        if 'speaker' in segment:
+                            retry_speaker_ids.add(segment['speaker'])
+                    
+                    console.print(f"[cyan]Speakers detected after retry: {len(retry_speaker_ids)}[/cyan]")
+                    call_logger.info(f"Speakers detected after retry: {len(retry_speaker_ids)}")
                 
                 # Log detailed transcription result to file only
                 call_logger.debug(f"Transcription response: {json.dumps(transcription_segments, ensure_ascii=False)}")
@@ -363,8 +397,9 @@ class CallProcessor:
                 
             # Mark call as processed
             call_logger.info("Marking call as processed")
+            now = datetime.datetime.now(datetime.timezone.utc).isoformat()
             self.supabase.table('calls') \
-                .update({'processed': True}) \
+                .update({'processed': True, 'updated_at': now}) \
                 .eq('id', call_id) \
                 .execute()
             console.print("[green]✓ Call marked as processed[/green]")
@@ -528,5 +563,78 @@ class CallProcessor:
                 f"Call Details Analysis: {step_times['call_details']:.2f}s / {avg_step_times['call_details']:.2f}s",
             ]),
             title="📊 Processing Statistics",
+            border_style="blue"
+        ))
+
+    async def fetch_call_by_id(self, call_id):
+        """Fetch a specific call by ID"""
+        console.print(f"[bold blue]Fetching call with ID: {call_id}[/bold blue]")
+        self.file_logger.info(f"Fetching call with ID: {call_id}")
+        
+        response = self.supabase.table('calls') \
+            .select('id, recording_url, organization_id, processed') \
+            .eq('id', call_id) \
+            .execute()
+        
+        if not response.data:
+            console.print(f"[red]Call with ID {call_id} not found[/red]")
+            self.file_logger.error(f"Call with ID {call_id} not found")
+            return None
+        
+        call_info = response.data[0]
+        console.print(f"[green]Found call: {call_id}[/green]")
+        self.file_logger.info(f"Found call: {call_id}, processed: {call_info['processed']}")
+        
+        return call_info
+
+    def _display_single_call_stats(self, result):
+        """Display statistics for a single call"""
+        self.file_logger.info("Calculating statistics for single call")
+        
+        # Get call duration from Supabase
+        call_response = self.supabase.table('calls') \
+            .select('duration') \
+            .eq('id', result['call_id']) \
+            .execute()
+        
+        if not call_response.data or 'duration' not in call_response.data[0]:
+            console.print("[yellow]Could not retrieve call duration[/yellow]")
+            self.file_logger.warning("Could not retrieve call duration")
+            return
+        
+        duration = call_response.data[0]['duration']
+        processing_time = result.get('processing_time', 0)
+        step_times = result.get('step_times', {})
+        
+        # Calculate processing ratio
+        processing_ratio = processing_time / duration if duration > 0 else 0
+        
+        # Log stats to file
+        self.file_logger.info(f"Call Duration: {duration:.2f} seconds ({duration/60:.2f} minutes)")
+        self.file_logger.info(f"Processing Time: {processing_time:.2f} seconds")
+        self.file_logger.info(f"Processing-to-Audio Ratio: {processing_ratio:.2f}x realtime")
+        self.file_logger.info("Step Breakdown:")
+        for step, time_value in step_times.items():
+            self.file_logger.info(f"  {step}: {time_value:.2f}s")
+        
+        # Display stats to console
+        console.print(Panel(
+            "\n".join([
+                "[bold cyan]Call Processing Statistics[/bold cyan]",
+                "",
+                f"[bold]Audio Content:[/bold]",
+                f"Call Duration: {duration:.2f} seconds ({duration/60:.2f} minutes)",
+                "",
+                f"[bold]Processing Performance:[/bold]",
+                f"Total Processing Time: {processing_time:.2f} seconds",
+                f"Processing-to-Audio Ratio: {processing_ratio:.2f}x realtime",
+                "",
+                f"[bold]Step Breakdown:[/bold]",
+                f"Transcription: {step_times.get('transcription', 0):.2f}s",
+                f"Events Analysis: {step_times.get('events_analysis', 0):.2f}s",
+                f"Summary Generation: {step_times.get('summary', 0):.2f}s",
+                f"Call Details Analysis: {step_times.get('call_details', 0):.2f}s",
+            ]),
+            title="📊 Call Processing Statistics",
             border_style="blue"
         )) 
