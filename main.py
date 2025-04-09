@@ -499,6 +499,7 @@ async def summarize_conversation(request: ConversationRequest):
             status_code=500,
             detail=f"Error summarizing conversation: {str(e)}"
         )
+
 @app.post("/api/documents/upload")
 async def upload_document(
     file: UploadFile = File(...),
@@ -541,14 +542,20 @@ async def upload_document(
             chunks = await processor.process_document(temp_file.name, metadata_obj)
             
             # Get embeddings for chunks
-            embeddings = []
-            for chunk in chunks:
-                response = processor.openai_client.embeddings.create(
-                    input=chunk.content,
-                    model="text-embedding-3-small"
+            try:
+                embeddings = []
+                for chunk in chunks:
+                    response = processor.openai_client.embeddings.create(
+                        input=chunk.content,
+                        model="text-embedding-3-small"
+                        )
+                    embeddings.append(response.data[0].embedding)
+            except Exception as e:
+                print(f"Error in get_embeddings: {str(e)}")
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Error getting embeddings: {str(e)}"
                 )
-                embeddings.append(response.data[0].embedding)
-            
             # Store in vector database
             vector_store = VectorStore()
             await vector_store.store_document(chunks, embeddings, metadata_obj)
