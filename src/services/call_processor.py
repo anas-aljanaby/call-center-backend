@@ -572,7 +572,7 @@ class CallProcessor:
         self.file_logger.info(f"Fetching call with ID: {call_id}")
         
         response = self.supabase.table('calls') \
-            .select('id, recording_url, organization_id, processed') \
+            .select('id, recording_url, storage_path, organization_id, processed') \
             .eq('id', call_id) \
             .execute()
         
@@ -584,6 +584,35 @@ class CallProcessor:
         call_info = response.data[0]
         console.print(f"[green]Found call: {call_id}[/green]")
         self.file_logger.info(f"Found call: {call_id}, processed: {call_info['processed']}")
+        
+        # Generate a fresh signed URL
+        try:
+            # If storage_path exists, use it
+            if call_info.get('storage_path'):
+                bucket_name, file_name = call_info['storage_path'].split('/', 1)
+            # Otherwise try to extract from recording_url
+            elif call_info.get('recording_url'):
+                url_parts = call_info['recording_url'].split('/storage/v1/object/sign/')[1].split('?')[0]
+                bucket_name, file_name = url_parts.split('/', 1)
+                
+                # Update the storage_path for future use
+                self.supabase.table('calls').update({
+                    'storage_path': f"{bucket_name}/{file_name}"
+                }).eq('id', call_id).execute()
+                self.file_logger.info(f"Updated storage_path for call {call_id}")
+            else:
+                self.file_logger.error("No recording URL or storage path available")
+                return call_info
+            
+            # Generate fresh URL
+            fresh_url = self.supabase.storage.from_(bucket_name).create_signed_url(
+                file_name,
+                60 * 60  # 1 hour expiry
+            )['signedURL']
+            call_info['recording_url'] = fresh_url
+            self.file_logger.info("Generated fresh signed URL for file access")
+        except Exception as e:
+            self.file_logger.error(f"Failed to generate fresh URL: {str(e)}")
         
         return call_info
 

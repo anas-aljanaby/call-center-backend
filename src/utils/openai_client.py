@@ -22,5 +22,6 @@ def get_openai_client(model: str = None):
         )
     else:
         return OpenAI(
-            api_key=os.getenv("OPENAI_API_KEY"),
+            base_url="https://openrouter.ai/api/v1",
+            api_key=os.getenv("OPENROUTER_API_KEY"),
         )

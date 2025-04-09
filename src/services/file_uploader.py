@@ -121,11 +121,15 @@ class FileUploader:
             # Randomly select resolution status
             resolution_status = random.choice(['resolved', 'pending'])
             
+            # Extract storage path from URL
+            storage_path = file_url.split('/object/sign/')[1].split('?')[0]
+            
             # Create call record
             call_data = {
                 'organization_id': self.organization_id,
                 'agent_id': self.agent_id,
                 'recording_url': file_url,
+                'storage_path': storage_path,  # Store the path separately
                 'duration': duration,
                 'started_at': started_at.isoformat(),
                 'ended_at': ended_at.isoformat(),
