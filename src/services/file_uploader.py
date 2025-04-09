@@ -24,14 +24,20 @@ class FileUploader:
         self.ensure_bucket_exists()
 
     def ensure_bucket_exists(self):
-        """Ensure the storage bucket exists"""
+        """Ensure the storage bucket exists and has public access"""
         try:
             buckets = self.supabase.storage.list_buckets()
             bucket_exists = any(bucket.name == self.bucket_name for bucket in buckets)
             
             if not bucket_exists:
-                self.supabase.storage.create_bucket(self.bucket_name)
-                print(f"Created bucket: {self.bucket_name}")
+                # Create bucket with public access
+                self.supabase.storage.create_bucket(
+                    self.bucket_name,
+                    options={
+                        'public': True  # This makes the bucket public
+                    }
+                )
+                print(f"Created public bucket: {self.bucket_name}")
         except Exception as e:
             print(f"Error ensuring bucket exists: {str(e)}")
             raise
@@ -81,11 +87,8 @@ class FileUploader:
                 {'content-type': mimetypes.guess_type(file_path)[0]}
             )
         
-        # Get the private URL
-        file_url = self.supabase.storage.from_(self.bucket_name).create_signed_url(
-            unique_filename,
-            60 * 60 * 24  # 24 hour expiry
-        )['signedURL']
+        # Get the public URL instead of a signed URL
+        file_url = self.supabase.storage.from_(self.bucket_name).get_public_url(unique_filename)
 
         # For audio files, handle as call recording if organization_id is provided
         if is_audio and self.organization_id and self.agent_id:
@@ -121,8 +124,9 @@ class FileUploader:
             # Randomly select resolution status
             resolution_status = random.choice(['resolved', 'pending'])
             
-            # Extract storage path from URL
-            storage_path = file_url.split('/object/sign/')[1].split('?')[0]
+            # Extract storage path from URL - modified for public URLs
+            # The format will be different from signed URLs
+            storage_path = f"{self.bucket_name}/{file_url.split('/')[-1]}"
             
             # Create call record
             call_data = {

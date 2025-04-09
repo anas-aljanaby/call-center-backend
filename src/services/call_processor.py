@@ -585,34 +585,25 @@ class CallProcessor:
         console.print(f"[green]Found call: {call_id}[/green]")
         self.file_logger.info(f"Found call: {call_id}, processed: {call_info['processed']}")
         
-        # Generate a fresh signed URL
-        try:
-            # If storage_path exists, use it
-            if call_info.get('storage_path'):
+        # Generate a public URL using storage_path if needed
+        if call_info.get('storage_path') and (not call_info.get('recording_url') or '?' in call_info.get('recording_url')):
+            try:
                 bucket_name, file_name = call_info['storage_path'].split('/', 1)
-            # Otherwise try to extract from recording_url
-            elif call_info.get('recording_url'):
-                url_parts = call_info['recording_url'].split('/storage/v1/object/sign/')[1].split('?')[0]
-                bucket_name, file_name = url_parts.split('/', 1)
+                public_url = self.supabase.storage.from_(bucket_name).get_public_url(file_name)
                 
-                # Update the storage_path for future use
+                # Update the recording_url in the database with the public URL
                 self.supabase.table('calls').update({
-                    'storage_path': f"{bucket_name}/{file_name}"
+                    'recording_url': public_url
                 }).eq('id', call_id).execute()
-                self.file_logger.info(f"Updated storage_path for call {call_id}")
-            else:
-                self.file_logger.error("No recording URL or storage path available")
-                return call_info
-            
-            # Generate fresh URL
-            fresh_url = self.supabase.storage.from_(bucket_name).create_signed_url(
-                file_name,
-                60 * 60  # 1 hour expiry
-            )['signedURL']
-            call_info['recording_url'] = fresh_url
-            self.file_logger.info("Generated fresh signed URL for file access")
-        except Exception as e:
-            self.file_logger.error(f"Failed to generate fresh URL: {str(e)}")
+                
+                # Update the call_info object with the public URL
+                call_info['recording_url'] = public_url
+                self.file_logger.info("Generated public URL for file access")
+            except Exception as e:
+                self.file_logger.error(f"Failed to generate public URL: {str(e)}")
+                # If we can't generate a public URL, we'll use the existing recording_url
+        else:
+            self.file_logger.info("Using existing recording URL")
         
         return call_info
 

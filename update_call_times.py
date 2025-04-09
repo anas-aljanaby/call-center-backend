@@ -27,7 +27,7 @@ def update_call_times():
     )
     
     # Get all calls
-    response = supabase.table('calls').select('id, duration, recording_url').execute()
+    response = supabase.table('calls').select('id, duration, recording_url, storage_path').execute()
     calls = response.data
     
     # Update each call with a random start time
@@ -44,7 +44,15 @@ def update_call_times():
         # Convert signed URL to public URL
         recording_url = call['recording_url']
         if recording_url and '?' in recording_url:
+            # For signed URLs, remove the query parameters
             recording_url = recording_url.split('?')[0]
+        elif call.get('storage_path'):
+            # If we have a storage path, generate a fresh public URL
+            try:
+                bucket_name, file_name = call['storage_path'].split('/', 1)
+                recording_url = supabase.storage.from_(bucket_name).get_public_url(file_name)
+            except Exception as e:
+                print(f"Error generating public URL for call {call['id']}: {str(e)}")
         
         # Update the record
         supabase.table('calls').update({
