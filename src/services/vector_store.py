@@ -11,8 +11,10 @@ class VectorStore:
             os.getenv('SUPABASE_URL'),
             os.getenv('SUPABASE_KEY')
         )
+        # Use direct OpenAI API for embeddings
         self.openai_client = OpenAI(
             api_key=os.getenv('OPENAI_API_KEY'),
+            # Don't set base_url to use the default OpenAI API endpoint
         )
 
     async def store_document(

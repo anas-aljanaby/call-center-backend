@@ -541,15 +541,9 @@ async def upload_document(
             processor = DocumentProcessor()
             chunks = await processor.process_document(temp_file.name, metadata_obj)
             
-            # Get embeddings for chunks
+            # Get embeddings for chunks using the embeddings_client
             try:
-                embeddings = []
-                for chunk in chunks:
-                    response = processor.openai_client.embeddings.create(
-                        input=chunk.content,
-                        model="text-embedding-3-small"
-                        )
-                    embeddings.append(response.data[0].embedding)
+                embeddings = await processor.get_embeddings(chunks)
             except Exception as e:
                 print(f"Error in get_embeddings: {str(e)}")
                 raise HTTPException(

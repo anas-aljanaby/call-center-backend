@@ -147,7 +147,7 @@ class DocumentProcessor:
     async def create_embeddings(self, chunks: List[DocumentChunk]) -> List[List[float]]:
         embeddings = []
         for chunk in chunks:
-            response = self.openai_client.embeddings.create(
+            response = self.embeddings_client.embeddings.create(
                 input=chunk.content,
                 model="text-embedding-3-small"
             )

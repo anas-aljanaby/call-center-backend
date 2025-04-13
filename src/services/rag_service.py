@@ -3,6 +3,7 @@ import openai
 import os
 from src.services.vector_store import VectorStore
 from src.utils.openai_client import get_openai_client
+from openai import OpenAI
 
 class RAGService:
     def __init__(self):
@@ -10,7 +11,11 @@ class RAGService:
         self.embedding_model = "text-embedding-3-small"
         self.generation_model = "gpt-4o"
         self.openai_client = get_openai_client(self.generation_model)
-        self.embeddings_client = get_openai_client()
+        # Use direct OpenAI API for embeddings
+        self.embeddings_client = OpenAI(
+            api_key=os.getenv('OPENAI_API_KEY'),
+            # Don't set base_url to use the default OpenAI API endpoint
+        )
         
     async def get_answer(self, question: str, max_chunks: int = 5) -> Dict:
         # Get relevant chunks
