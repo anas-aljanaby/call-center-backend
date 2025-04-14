@@ -14,13 +14,19 @@ async def main():
                       help='Limit the number of calls to process')
     parser.add_argument('--call-id', type=str,
                       help='Process a specific call by ID')
+    parser.add_argument('--reprocess', action='store_true',
+                      help='Reprocess all calls, including those already processed')
     args = parser.parse_args()
     
     # Ensure logs directory exists
     logs_dir = Path("logs")
     logs_dir.mkdir(exist_ok=True)
     
-    processor = CallProcessor(skip_transcription=args.skip_transcription, collect_stats=args.stats)
+    processor = CallProcessor(
+        skip_transcription=args.skip_transcription, 
+        collect_stats=args.stats,
+        reprocess=args.reprocess
+    )
     
     if args.call_id:
         # Process a single call by ID

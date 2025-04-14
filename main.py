@@ -65,8 +65,9 @@ Conversation:
 
 EVENTS_PROMPT = """
 Analyze this customer service conversation and identify key events that occurred.
-Group events by actor (Agent/Customer) and keep descriptions concise.
-Return at most 3 events.
+When not sure if an event is significant, add it to the list.
+Never add greetings or small talk to the list.
+Each call usually has at least 1 event.
 
 The input data is structured as a list of segments, each with the following fields:
 - startTime: The start time of the segment in seconds.
@@ -410,8 +411,7 @@ async def analyze_events(request: ConversationRequest):
                 {"role": "system", "content": "You are a conversation analysis assistant specialized in Arabic customer service interactions."},
                 {"role": "user", "content": EVENTS_PROMPT + conversation_json}
             ],
-            temperature=0.3,
-            # max_tokens=100
+            temperature=0.7,
         )
         
         print(response)
@@ -474,7 +474,6 @@ async def summarize_conversation(request: ConversationRequest):
                 {"role": "user", "content": SUMMARY_PROMPT + conversation}
             ],
             temperature=0.3,
-            max_tokens=500
         )
         
         # Clean and parse the response

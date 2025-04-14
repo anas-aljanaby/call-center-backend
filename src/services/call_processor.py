@@ -22,7 +22,7 @@ load_dotenv()
 console = Console()
 
 class CallProcessor:
-    def __init__(self, skip_transcription=False, collect_stats=False):
+    def __init__(self, skip_transcription=False, collect_stats=False, reprocess=False):
         self.supabase: Client = create_client(
             os.getenv('SUPABASE_URL'),
             os.getenv('SUPABASE_KEY')
@@ -31,6 +31,7 @@ class CallProcessor:
         self.bucket_name = 'call-recordings'
         self.skip_transcription = skip_transcription
         self.collect_stats = collect_stats
+        self.reprocess = reprocess
         self.settings = ProcessingSettings()
         self.transcription_service = ElevenLabsTranscriptionService(api_key=os.getenv('ELEVENLABS_API_KEY'))
         
@@ -70,19 +71,28 @@ class CallProcessor:
         self.file_logger.info(f"=== Starting new processing run {self.run_id} ===")
         self.file_logger.info(f"Skip transcription: {self.skip_transcription}")
         self.file_logger.info(f"Collect stats: {self.collect_stats}")
+        self.file_logger.info(f"Reprocess: {self.reprocess}")
         
         # Log to console
         console.print(f"[bold blue]Starting processing run [/bold blue][bold green]{self.run_id}[/bold green]")
         console.print(f"[blue]Detailed logs will be saved to: [/blue][cyan]{logs_dir / self.log_filename}[/cyan]")
         
     def fetch_unprocessed_calls(self, limit=None):
-        """Fetch unprocessed calls from the calls table with optional limit"""
-        console.print("[bold blue]Fetching unprocessed calls...[/bold blue]")
-        self.file_logger.info("Fetching unprocessed calls")
+        """Fetch calls from the calls table with optional limit"""
+        console.print("[bold blue]Fetching calls...[/bold blue]")
+        self.file_logger.info("Fetching calls")
         
         query = self.supabase.table('calls') \
-            .select('id, recording_url, organization_id') \
-            .eq('processed', False)
+            .select('id, recording_url, organization_id')
+        
+        # Only filter by processed=False if reprocess is False
+        if not self.reprocess:
+            query = query.eq('processed', False)
+            console.print("[yellow]Only fetching unprocessed calls[/yellow]")
+            self.file_logger.info("Only fetching unprocessed calls")
+        else:
+            console.print("[yellow]Fetching all calls (including processed ones)[/yellow]")
+            self.file_logger.info("Fetching all calls (including processed ones)")
         
         # Apply limit if specified
         if limit is not None:
@@ -92,8 +102,8 @@ class CallProcessor:
         response = query.execute()
         call_count = len(response.data)
         
-        console.print(f"[green]Found {call_count} unprocessed calls[/green]")
-        self.file_logger.info(f"Found {call_count} unprocessed calls")
+        console.print(f"[green]Found {call_count} calls[/green]")
+        self.file_logger.info(f"Found {call_count} calls")
         
         if limit is not None and call_count > 0:
             console.print(f"[yellow]Limited to processing {limit} calls[/yellow]")
