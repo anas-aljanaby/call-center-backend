@@ -113,7 +113,9 @@ def main():
         try:
             agent = agent_manager.get_random_agent()
             agent_id = agent['id']
-            print(f"Selected agent: {agent['full_name']}")
+            if args.verbose:
+                print(f"Initial agent selected: {agent['full_name']}")
+                print("Note: A new random agent will be selected for each file in the directory")
         except ValueError as e:
             print(f"Error: {str(e)}")
             return
@@ -210,7 +212,15 @@ def process_directory(dir_path, args, agent_id, agent_manager, recursive=False):
     # Process all files in the current directory
     for file_path in dir_path.glob('*.*'):
         if file_path.is_file():
-            result = process_file(file_path, args, agent_id, agent_manager)
+            # For each file, get a new random agent if no specific agent was provided
+            current_agent_id = agent_id
+            if not args.agent_id:
+                agent = agent_manager.get_random_agent()
+                current_agent_id = agent['id']
+                if args.verbose:
+                    print(f"Selected agent for {file_path.name}: {agent['full_name']}")
+            
+            result = process_file(file_path, args, current_agent_id, agent_manager)
             if result:
                 results.append(result)
     
