@@ -14,7 +14,7 @@ import numpy as np
 from pydantic import BaseModel
 from typing import List, Dict, Optional
 import openai
-from models import ProcessingSettings, TranscriptionRequest, ConversationRequest
+from src.models.models import ProcessingSettings, TranscriptionRequest, ConversationRequest
 from src.services.document_processor import DocumentProcessor
 from src.services.vector_store import VectorStore
 from src.models.document_models import DocumentMetadata

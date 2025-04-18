@@ -15,7 +15,7 @@ import datetime
 import uuid
 
 sys.path.append(str(Path(__file__).parent.parent.parent))
-from models import ProcessingSettings
+from src.models.models import ProcessingSettings
 from src.services.transcription_service import ElevenLabsTranscriptionService
 
 load_dotenv()
