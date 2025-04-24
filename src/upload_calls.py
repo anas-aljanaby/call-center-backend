@@ -1,4 +1,5 @@
-from services.file_uploader import FileUploader
+from services.call_recording_uploader import CallRecordingUploader
+from services.document_uploader import DocumentUploader
 from services.agent_manager import AgentManager
 import argparse
 from pathlib import Path
@@ -147,6 +148,8 @@ class FileProcessor:
         self.agent_id = agent_id
         self.verbose = verbose
         self.agent_manager = AgentManager(org_id)
+        self.call_uploader = CallRecordingUploader(organization_id=org_id, agent_id=agent_id)
+        self.document_uploader = DocumentUploader()
         
     def get_agent_id(self) -> str:
         """
@@ -220,15 +223,8 @@ class FileProcessor:
                 except Exception as e:
                     logger.error(f"Error checking audio duration for {file_path}: {str(e)}")
             
-        # For audio files, use call-recordings bucket
-        uploader = FileUploader(
-            organization_id=self.org_id, 
-            agent_id=self.get_agent_id(),
-            bucket_name='call-recordings'  # Explicitly set bucket for call recordings
-        )
-        
-        # Upload the file
-        result = uploader.upload_file(temp_path, original_filename=file_path.name)
+        # Upload the file using CallRecordingUploader
+        result = self.call_uploader.upload_call_recording(temp_path, original_filename=file_path.name)
         
         # Clean up temporary file if it was created
         if not args.skip_silence_removal and temp_path.exists():
@@ -255,9 +251,8 @@ class FileProcessor:
         Returns:
             ProcessResult
         """
-        # For supported document files, use documents bucket
-        uploader = FileUploader(bucket_name='documents')
-        result = uploader.upload_file(file_path)
+        # Upload using DocumentUploader
+        result = self.document_uploader.upload_document(file_path)
         
         return ProcessResult(
             success=result['success'],

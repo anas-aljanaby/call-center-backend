@@ -18,7 +18,7 @@ from src.models.models import ProcessingSettings, TranscriptionRequest, Conversa
 from src.services.document_processor import DocumentProcessor
 from src.services.vector_store import VectorStore
 from src.models.document_models import DocumentMetadata
-from src.services.file_uploader import FileUploader
+from src.services.document_uploader import DocumentUploader
 from src.services.rag_service import RAGService
 from datetime import datetime
 import pytz
@@ -41,6 +41,7 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:3000",
         "https://call-center-dashboard-n8z4y8vb2-anas-ahmeds-projects-c957fb83.vercel.app",
+        "https://contact-center-project.vercel.app",
         "*"
     ],
     allow_credentials=True,
@@ -512,10 +513,7 @@ async def upload_document(
         metadata_obj = DocumentMetadata(**metadata_dict)
         
         # Initialize services
-        file_uploader = FileUploader(
-            # user_id=user_id,
-            bucket_name='documents'
-        )
+        document_uploader = DocumentUploader()
         
         # Upload file and get URL
         with NamedTemporaryFile(delete=False, suffix=Path(file.filename).suffix) as temp_file:
@@ -524,7 +522,7 @@ async def upload_document(
             temp_file.flush()
             
             # Upload to storage
-            result = file_uploader.upload_file(Path(temp_file.name))
+            result = document_uploader.upload_document(Path(temp_file.name))
             if not result['success']:
                 raise HTTPException(
                     status_code=500,
