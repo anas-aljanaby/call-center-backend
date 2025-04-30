@@ -6,6 +6,7 @@ import pytz
 from pydub import AudioSegment
 from .base_file_uploader import BaseFileUploader
 
+
 class CallRecordingUploader(BaseFileUploader):
     def __init__(self, organization_id: str = None, agent_id: str = None):
         super().__init__(bucket_name='call-recordings')
